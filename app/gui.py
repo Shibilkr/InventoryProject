@@ -174,16 +174,34 @@ class FormDialog(tk.Toplevel):
         # Form body
         body = tk.Frame(self, bg=CARD_BG, padx=20, pady=14)
         body.pack(fill=tk.BOTH)
-        for i, (key, label, required, default) in enumerate(fields):
+        self._combo_maps: dict[str, dict[str, str]] = {}  # key -> {display: value}
+        for i, field_def in enumerate(fields):
+            key, label, required, default = field_def[:4]
+            choices = field_def[4] if len(field_def) > 4 else None
             lbl_text = label + ("  *" if required else "")
             tk.Label(body, text=lbl_text, bg=CARD_BG, font=("Segoe UI", 9),
                      fg="#333333", anchor="w").grid(
                 row=i, column=0, sticky="w", pady=(6, 2), padx=(0, 14))
             var = tk.StringVar(value="" if default is None else str(default))
             self._entries[key] = var
-            tk.Entry(body, textvariable=var, width=38, font=("Segoe UI", 9),
-                     relief="solid", bd=1, bg="#f7f9ff", fg="#222").grid(
-                row=i, column=1, pady=(6, 2), ipady=4)
+            if choices:
+                # choices = [(value, display_text), ...]
+                display_list = [display for _, display in choices]
+                value_map = {display: val for val, display in choices}
+                self._combo_maps[key] = value_map
+                # Pre-select the matching display text for current value
+                if default:
+                    for val, display in choices:
+                        if str(val) == str(default):
+                            var.set(display)
+                            break
+                cb = ttk.Combobox(body, textvariable=var, values=display_list,
+                                 width=36, font=("Segoe UI", 9), state="readonly")
+                cb.grid(row=i, column=1, pady=(6, 2), ipady=4)
+            else:
+                tk.Entry(body, textvariable=var, width=38, font=("Segoe UI", 9),
+                         relief="solid", bd=1, bg="#f7f9ff", fg="#222").grid(
+                    row=i, column=1, pady=(6, 2), ipady=4)
 
         # Button row
         foot = tk.Frame(self, bg=CARD_BG, padx=20, pady=10)
@@ -195,7 +213,12 @@ class FormDialog(tk.Toplevel):
 
     def _submit(self):
         data = {k: v.get().strip() for k, v in self._entries.items()}
-        for key, label, required, _ in self._fields:
+        # Map combobox display text back to actual values
+        for key, value_map in self._combo_maps.items():
+            if key in data and data[key] in value_map:
+                data[key] = value_map[data[key]]
+        for field_def in self._fields:
+            key, label, required = field_def[0], field_def[1], field_def[2]
             if required and not data.get(key):
                 messagebox.showwarning("Required",
                                        f"'{label}' is required.", parent=self)
@@ -214,6 +237,8 @@ class CRUDFrame(tk.Frame):
     TITLE:    str = ""
     ICON:     str = ""
 
+    _AUTO_REFRESH_MS = 5000  # auto-refresh every 5 seconds
+
     def __init__(self, parent, *args, **kw):
         super().__init__(parent, bg=CONTENT_BG, *args, **kw)
         self._all_docs: list[dict] = []
@@ -221,6 +246,14 @@ class CRUDFrame(tk.Frame):
         self._sort_asc: bool = True
         self._build_ui()
         self.after(300, self.refresh)
+        self._schedule_auto_refresh()
+
+    def _schedule_auto_refresh(self):
+        self.after(self._AUTO_REFRESH_MS, self._auto_refresh)
+
+    def _auto_refresh(self):
+        self.refresh(_silent=True)
+        self._schedule_auto_refresh()
 
     def _build_ui(self):
         # Section title + record counter
@@ -298,11 +331,12 @@ class CRUDFrame(tk.Frame):
     def get_row_values(self, doc: dict) -> list:
         return [str(doc.get(c[0], "")) for c in self.COLUMNS]
 
-    def refresh(self):
+    def refresh(self, _silent: bool = False):
         try:
             self._all_docs = api_get(self.ENDPOINT)
         except Exception as exc:
-            messagebox.showerror("Load error", _api_error(exc))
+            if not _silent:
+                messagebox.showerror("Load error", _api_error(exc))
             return
         self._apply_filter()
 
@@ -410,20 +444,50 @@ class ProductsFrame(CRUDFrame):
     ICON     = "📦"
     COLUMNS  = [("id","ID",200),("name","Name",145),("barcode","Barcode",135),
                 ("price","Price ($)",85),("stock","Stock",65),
-                ("supplier_id","Supplier ID",200),("description","Description",195)]
+                ("supplier_name","Supplier",160),("description","Description",165)]
+
+    def __init__(self, parent, *args, **kw):
+        self._supplier_map: dict[str, str] = {}  # id -> name
+        super().__init__(parent, *args, **kw)
+
+    def refresh(self):
+        try:
+            suppliers = api_get("/suppliers")
+            self._supplier_map = {s["id"]: s["name"] for s in suppliers}
+        except Exception:
+            pass
+        super().refresh()
 
     def get_row_values(self, doc):
+        sid = doc.get("supplier_id", "")
+        sname = self._supplier_map.get(sid, sid)
         return [doc.get("id",""), doc.get("name",""), doc.get("barcode",""),
                 doc.get("price",""), doc.get("stock",""),
-                doc.get("supplier_id",""), doc.get("description","")]
+                sname, doc.get("description","")]
+
+    def _get_supplier_choices(self):
+        """Fetch suppliers and return [(id, 'Name  (id)'), ...]."""
+        try:
+            suppliers = api_get("/suppliers")
+            return [("", "— None —")] + [
+                (s["id"], f"{s['name']}  ({s['id'][:8]}…)")
+                for s in suppliers
+            ]
+        except Exception:
+            return []
 
     def _fields(self, doc=None):
         d = doc or {}
-        return [("name","Name",True,d.get("name")),
-                ("price","Price",True,d.get("price")),
-                ("stock","Stock (qty)",False,d.get("stock",0)),
-                ("supplier_id","Supplier ID",False,d.get("supplier_id")),
-                ("description","Description",False,d.get("description"))]
+        supplier_choices = self._get_supplier_choices()
+        fields = [("name","Name",True,d.get("name")),
+                  ("price","Price",True,d.get("price")),
+                  ("stock","Stock (qty)",False,d.get("stock",0))]
+        if supplier_choices:
+            fields.append(("supplier_id","Supplier",False,d.get("supplier_id"),supplier_choices))
+        else:
+            fields.append(("supplier_id","Supplier ID",False,d.get("supplier_id")))
+        fields.append(("description","Description",False,d.get("description")))
+        return fields
 
     def open_add_dialog(self):
         def submit(data):
@@ -489,24 +553,51 @@ class InvoicesFrame(CRUDFrame):
     ENDPOINT = "/invoices"
     TITLE    = "Invoices"
     ICON     = "📄"
-    COLUMNS  = [("id","ID",200),("customer_id","Customer ID",200),
+    COLUMNS  = [("id","ID",200),("customer_name","Customer",160),
                 ("subtotal","Subtotal",90),("tax","Tax",70),("total","Total",90),
                 ("status","Status",80),("created_at","Created",160)]
 
+    def __init__(self, parent, *args, **kw):
+        self._customer_map: dict[str, str] = {}  # id -> name
+        super().__init__(parent, *args, **kw)
+
+    def refresh(self):
+        try:
+            customers = api_get("/customers")
+            self._customer_map = {c["id"]: c["name"] for c in customers}
+        except Exception:
+            pass
+        super().refresh()
+
     def get_row_values(self, doc):
-        return [doc.get("id",""), doc.get("customer_id",""),
+        cid = doc.get("customer_id", "")
+        cname = self._customer_map.get(cid, cid)
+        return [doc.get("id",""), cname,
                 doc.get("subtotal",""), doc.get("tax",""), doc.get("total",""),
                 doc.get("status",""),
                 doc.get("created_at","")[:19].replace("T"," ")
                 if doc.get("created_at") else ""]
 
+    def _get_customer_choices(self):
+        try:
+            customers = api_get("/customers")
+            return [(c["id"], f"{c['name']}  ({c['id'][:8]}\u2026)") for c in customers]
+        except Exception:
+            return []
+
     def _fields(self, doc=None):
         d = doc or {}
-        return [("customer_id","Customer ID",True,d.get("customer_id")),
-                ("subtotal","Subtotal",True,d.get("subtotal")),
-                ("tax","Tax",False,d.get("tax",0)),
-                ("total","Total",True,d.get("total")),
-                ("status","Status",False,d.get("status","draft"))]
+        customer_choices = self._get_customer_choices()
+        fields = []
+        if customer_choices:
+            fields.append(("customer_id","Customer",True,d.get("customer_id"),customer_choices))
+        else:
+            fields.append(("customer_id","Customer ID",True,d.get("customer_id")))
+        fields += [("subtotal","Subtotal",True,d.get("subtotal")),
+                   ("tax","Tax",False,d.get("tax",0)),
+                   ("total","Total",True,d.get("total")),
+                   ("status","Status",False,d.get("status","draft"))]
+        return fields
 
     def open_add_dialog(self):
         def submit(data):
@@ -549,21 +640,69 @@ class InvoiceItemsFrame(CRUDFrame):
     ENDPOINT = "/invoice-items"
     TITLE    = "Invoice Items"
     ICON     = "🔖"
-    COLUMNS  = [("id","ID",200),("invoice_id","Invoice ID",200),
-                ("product_id","Product ID",200),("quantity","Qty",60),
+    COLUMNS  = [("id","ID",200),("invoice_label","Invoice",180),
+                ("product_name","Product",160),("quantity","Qty",60),
                 ("unit_price","Unit Price $",90),("line_total","Line Total $",95)]
 
+    def __init__(self, parent, *args, **kw):
+        self._invoice_map: dict[str, str] = {}   # id -> label
+        self._product_map: dict[str, str] = {}   # id -> name
+        super().__init__(parent, *args, **kw)
+
+    def refresh(self):
+        try:
+            invoices = api_get("/invoices")
+            self._invoice_map = {inv["id"]: f"#{inv['id'][:8]}\u2026 ${inv.get('total','')}" for inv in invoices}
+        except Exception:
+            pass
+        try:
+            products = api_get("/products")
+            self._product_map = {p["id"]: p["name"] for p in products}
+        except Exception:
+            pass
+        super().refresh()
+
     def get_row_values(self, doc):
-        return [doc.get("id",""), doc.get("invoice_id",""),
-                doc.get("product_id",""), doc.get("quantity",""),
+        inv_id = doc.get("invoice_id", "")
+        prod_id = doc.get("product_id", "")
+        return [doc.get("id",""),
+                self._invoice_map.get(inv_id, inv_id),
+                self._product_map.get(prod_id, prod_id),
+                doc.get("quantity",""),
                 doc.get("unit_price",""), doc.get("line_total","")]
+
+    def _get_invoice_choices(self):
+        try:
+            invoices = api_get("/invoices")
+            return [(inv["id"], f"#{inv['id'][:8]}\u2026  ${inv.get('total','')}  [{inv.get('status','')}]")
+                    for inv in invoices]
+        except Exception:
+            return []
+
+    def _get_product_choices(self):
+        try:
+            products = api_get("/products")
+            return [(p["id"], f"{p['name']}  (Stock:{p.get('stock','?')})")
+                    for p in products]
+        except Exception:
+            return []
 
     def _fields(self, doc=None):
         d = doc or {}
-        return [("invoice_id","Invoice ID",True,d.get("invoice_id")),
-                ("product_id","Product ID",True,d.get("product_id")),
-                ("quantity","Quantity",True,d.get("quantity")),
-                ("unit_price","Unit Price",True,d.get("unit_price"))]
+        invoice_choices = self._get_invoice_choices()
+        product_choices = self._get_product_choices()
+        fields = []
+        if invoice_choices:
+            fields.append(("invoice_id","Invoice",True,d.get("invoice_id"),invoice_choices))
+        else:
+            fields.append(("invoice_id","Invoice ID",True,d.get("invoice_id")))
+        if product_choices:
+            fields.append(("product_id","Product",True,d.get("product_id"),product_choices))
+        else:
+            fields.append(("product_id","Product ID",True,d.get("product_id")))
+        fields += [("quantity","Quantity",True,d.get("quantity")),
+                   ("unit_price","Unit Price",True,d.get("unit_price"))]
+        return fields
 
     def open_add_dialog(self):
         def submit(data):
@@ -595,6 +734,14 @@ class DashboardFrame(tk.Frame):
         super().__init__(parent, bg=CONTENT_BG, *args, **kw)
         self._build()
         self.after(400, self.refresh)
+        self.after(5000, self._auto_refresh)
+
+    def _auto_refresh(self):
+        try:
+            self.refresh()
+        except Exception:
+            pass
+        self.after(5000, self._auto_refresh)
 
     def _stat_card(self, parent, icon, title, count_var, colour):
         card = tk.Frame(parent, bg=CARD_BG,
@@ -673,6 +820,14 @@ class BillingFrame(tk.Frame):
         self._products:   list[dict] = []
         self._build()
         self.after(400, self._reload)
+        self.after(10000, self._auto_reload)
+
+    def _auto_reload(self):
+        try:
+            self._reload()
+        except Exception:
+            pass
+        self.after(10000, self._auto_reload)
 
     def _build(self):
         tk.Label(self, text="💳  Create Billing Invoice",
