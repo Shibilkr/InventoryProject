@@ -54,9 +54,22 @@ def _get_or_404(collection: Collection, doc_id: str, name: str) -> tuple[ObjectI
     return oid, doc
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 # SUPPLIERS CRUD
+# MongoDB shell equivalents shown in each function
+# ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/suppliers", status_code=status.HTTP_201_CREATED)
 def create_supplier(payload: SupplierCreate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.suppliers.insertOne({
+    #   name: "ABC Electronics",
+    #   contact_email: "abc@email.com",
+    #   phone: "9876543210",
+    #   address: "Dubai, UAE",
+    #   created_at: ISODate("2026-03-07T10:00:00Z"),
+    #   updated_at: ISODate("2026-03-07T10:00:00Z")
+    # })
     now = now_utc()
     data = model_to_dict(payload)
     data["created_at"] = now
@@ -69,18 +82,27 @@ def create_supplier(payload: SupplierCreate) -> dict[str, Any]:
 
 @app.get("/suppliers")
 def list_suppliers() -> list[dict[str, Any]]:
+    # MongoDB shell:
+    # db.suppliers.find().sort({ created_at: -1 })
     docs = list(suppliers_col.find().sort("created_at", -1))
     return serialize_documents(docs)
 
 
 @app.get("/suppliers/{supplier_id}")
 def get_supplier(supplier_id: str) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.suppliers.findOne({ _id: ObjectId("<supplier_id>") })
     _, doc = _get_or_404(suppliers_col, supplier_id, "Supplier")
     return serialize_document(doc)
 
 
 @app.put("/suppliers/{supplier_id}")
 def update_supplier(supplier_id: str, payload: SupplierUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.suppliers.updateOne(
+    #   { _id: ObjectId("<supplier_id>") },
+    #   { $set: { name: "New Name", updated_at: ISODate("...") } }
+    # )
     supplier_oid, _ = _get_or_404(suppliers_col, supplier_id, "Supplier")
     updates = model_to_dict(payload, exclude_none=True)
     if not updates:
@@ -94,6 +116,10 @@ def update_supplier(supplier_id: str, payload: SupplierUpdate) -> dict[str, Any]
 
 @app.delete("/suppliers/{supplier_id}")
 def delete_supplier(supplier_id: str) -> dict[str, str]:
+    # MongoDB shell:
+    # db.suppliers.deleteOne({ _id: ObjectId("<supplier_id>") })
+    # Guard: cannot delete if linked products exist:
+    # db.products.findOne({ supplier_id: ObjectId("<supplier_id>") })
     supplier_oid, _ = _get_or_404(suppliers_col, supplier_id, "Supplier")
 
     if products_col.find_one({"supplier_id": supplier_oid}):
@@ -103,9 +129,25 @@ def delete_supplier(supplier_id: str) -> dict[str, str]:
     return {"message": "Supplier deleted"}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 # PRODUCTS CRUD
+# MongoDB shell equivalents shown in each function
+# ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/products", status_code=status.HTTP_201_CREATED)
 def create_product(payload: ProductCreate) -> dict[str, Any]:
+    # Barcode is auto-generated (EAN-13): no user input needed.
+    # MongoDB shell:
+    # db.products.insertOne({
+    #   name: "Laptop Dell XPS",
+    #   barcode: "4901234567890",   // auto-generated EAN-13
+    #   price: 1299.99,
+    #   stock: 50,
+    #   supplier_id: ObjectId("<supplier_id>"),
+    #   description: "15-inch laptop",
+    #   created_at: ISODate("2026-03-07T10:00:00Z"),
+    #   updated_at: ISODate("2026-03-07T10:00:00Z")
+    # })
     data = model_to_dict(payload)
     supplier_id = data.get("supplier_id")
     if supplier_id:
@@ -133,18 +175,27 @@ def create_product(payload: ProductCreate) -> dict[str, Any]:
 
 @app.get("/products")
 def list_products() -> list[dict[str, Any]]:
+    # MongoDB shell:
+    # db.products.find().sort({ created_at: -1 })
     docs = list(products_col.find().sort("created_at", -1))
     return serialize_documents(docs)
 
 
 @app.get("/products/{product_id}")
 def get_product(product_id: str) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.products.findOne({ _id: ObjectId("<product_id>") })
     _, doc = _get_or_404(products_col, product_id, "Product")
     return serialize_document(doc)
 
 
 @app.put("/products/{product_id}")
 def update_product(product_id: str, payload: ProductUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.products.updateOne(
+    #   { _id: ObjectId("<product_id>") },
+    #   { $set: { name: "New Name", price: 999.99, updated_at: ISODate("...") } }
+    # )
     product_oid, _ = _get_or_404(products_col, product_id, "Product")
     updates = model_to_dict(payload, exclude_none=True)
     if not updates:
@@ -163,6 +214,10 @@ def update_product(product_id: str, payload: ProductUpdate) -> dict[str, Any]:
 
 @app.delete("/products/{product_id}")
 def delete_product(product_id: str) -> dict[str, str]:
+    # MongoDB shell:
+    # db.products.deleteOne({ _id: ObjectId("<product_id>") })
+    # Guard: cannot delete if used in any invoice item:
+    # db.invoice_items.findOne({ product_id: ObjectId("<product_id>") })
     product_oid, _ = _get_or_404(products_col, product_id, "Product")
 
     if invoice_items_col.find_one({"product_id": product_oid}):
@@ -172,9 +227,22 @@ def delete_product(product_id: str) -> dict[str, str]:
     return {"message": "Product deleted"}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 # CUSTOMERS CRUD
+# MongoDB shell equivalents shown in each function
+# ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/customers", status_code=status.HTTP_201_CREATED)
 def create_customer(payload: CustomerCreate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.customers.insertOne({
+    #   name: "John Smith",
+    #   email: "john@gmail.com",   // sparse unique index — duplicates rejected
+    #   phone: "0501234567",
+    #   address: "Abu Dhabi, UAE",
+    #   created_at: ISODate("2026-03-07T10:00:00Z"),
+    #   updated_at: ISODate("2026-03-07T10:00:00Z")
+    # })
     now = now_utc()
     data = model_to_dict(payload)
     data["created_at"] = now
@@ -191,18 +259,27 @@ def create_customer(payload: CustomerCreate) -> dict[str, Any]:
 
 @app.get("/customers")
 def list_customers() -> list[dict[str, Any]]:
+    # MongoDB shell:
+    # db.customers.find().sort({ created_at: -1 })
     docs = list(customers_col.find().sort("created_at", -1))
     return serialize_documents(docs)
 
 
 @app.get("/customers/{customer_id}")
 def get_customer(customer_id: str) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.customers.findOne({ _id: ObjectId("<customer_id>") })
     _, doc = _get_or_404(customers_col, customer_id, "Customer")
     return serialize_document(doc)
 
 
 @app.put("/customers/{customer_id}")
 def update_customer(customer_id: str, payload: CustomerUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.customers.updateOne(
+    #   { _id: ObjectId("<customer_id>") },
+    #   { $set: { phone: "0509999999", updated_at: ISODate("...") } }
+    # )
     customer_oid, _ = _get_or_404(customers_col, customer_id, "Customer")
     updates = model_to_dict(payload, exclude_none=True)
     if not updates:
@@ -221,6 +298,10 @@ def update_customer(customer_id: str, payload: CustomerUpdate) -> dict[str, Any]
 
 @app.delete("/customers/{customer_id}")
 def delete_customer(customer_id: str) -> dict[str, str]:
+    # MongoDB shell:
+    # db.customers.deleteOne({ _id: ObjectId("<customer_id>") })
+    # Guard: cannot delete if they have invoices:
+    # db.invoices.findOne({ customer_id: ObjectId("<customer_id>") })
     customer_oid, _ = _get_or_404(customers_col, customer_id, "Customer")
 
     if invoices_col.find_one({"customer_id": customer_oid}):
@@ -230,9 +311,24 @@ def delete_customer(customer_id: str) -> dict[str, str]:
     return {"message": "Customer deleted"}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 # INVOICES CRUD
+# MongoDB shell equivalents shown in each function
+# ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/invoices", status_code=status.HTTP_201_CREATED)
 def create_invoice(payload: InvoiceCreate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoices.insertOne({
+    #   customer_id: ObjectId("<customer_id>"),  // indexed foreign key
+    #   subtotal: 1299.99,
+    #   tax: 65.00,
+    #   total: 1364.99,
+    #   status: "draft",
+    #   line_item_ids: [],
+    #   created_at: ISODate("2026-03-07T10:00:00Z"),
+    #   updated_at: ISODate("2026-03-07T10:00:00Z")
+    # })
     data = model_to_dict(payload)
     customer_oid = parse_object_id(data["customer_id"])
     _ensure_exists(customers_col, customer_oid, "Customer")
@@ -250,12 +346,17 @@ def create_invoice(payload: InvoiceCreate) -> dict[str, Any]:
 
 @app.get("/invoices")
 def list_invoices() -> list[dict[str, Any]]:
+    # MongoDB shell:
+    # db.invoices.find().sort({ created_at: -1 })
     docs = list(invoices_col.find().sort("created_at", -1))
     return serialize_documents(docs)
 
 
 @app.get("/invoices/{invoice_id}")
 def get_invoice(invoice_id: str) -> dict[str, Any]:
+    # MongoDB shell (invoice + its items):
+    # db.invoices.findOne({ _id: ObjectId("<invoice_id>") })
+    # db.invoice_items.find({ invoice_id: ObjectId("<invoice_id>") }).sort({ created_at: 1 })
     invoice_oid, doc = _get_or_404(invoices_col, invoice_id, "Invoice")
     items = list(invoice_items_col.find({"invoice_id": invoice_oid}).sort("created_at", 1))
     return {"invoice": serialize_document(doc), "items": serialize_documents(items)}
@@ -263,6 +364,11 @@ def get_invoice(invoice_id: str) -> dict[str, Any]:
 
 @app.put("/invoices/{invoice_id}")
 def update_invoice(invoice_id: str, payload: InvoiceUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoices.updateOne(
+    #   { _id: ObjectId("<invoice_id>") },
+    #   { $set: { status: "paid", updated_at: ISODate("...") } }
+    # )
     invoice_oid, _ = _get_or_404(invoices_col, invoice_id, "Invoice")
     updates = model_to_dict(payload, exclude_none=True)
     if not updates:
@@ -282,15 +388,32 @@ def update_invoice(invoice_id: str, payload: InvoiceUpdate) -> dict[str, Any]:
 
 @app.delete("/invoices/{invoice_id}")
 def delete_invoice(invoice_id: str) -> dict[str, str]:
+    # MongoDB shell (cascade delete — items first, then invoice):
+    # db.invoice_items.deleteMany({ invoice_id: ObjectId("<invoice_id>") })
+    # db.invoices.deleteOne({ _id: ObjectId("<invoice_id>") })
     invoice_oid, _ = _get_or_404(invoices_col, invoice_id, "Invoice")
     invoice_items_col.delete_many({"invoice_id": invoice_oid})
     invoices_col.delete_one({"_id": invoice_oid})
     return {"message": "Invoice and related invoice items deleted"}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 # INVOICE ITEMS CRUD
+# MongoDB shell equivalents shown in each function
+# ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/invoice-items", status_code=status.HTTP_201_CREATED)
 def create_invoice_item(payload: InvoiceItemCreate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoice_items.insertOne({
+    #   invoice_id: ObjectId("<invoice_id>"),   // indexed foreign key
+    #   product_id: ObjectId("<product_id>"),   // indexed foreign key
+    #   quantity: 2,
+    #   unit_price: 1299.99,
+    #   line_total: 2599.98,    // computed: quantity * unit_price
+    #   created_at: ISODate("2026-03-07T10:00:00Z"),
+    #   updated_at: ISODate("2026-03-07T10:00:00Z")
+    # })
     data = model_to_dict(payload)
 
     invoice_oid = parse_object_id(data["invoice_id"])
@@ -316,12 +439,16 @@ def create_invoice_item(payload: InvoiceItemCreate) -> dict[str, Any]:
 
 @app.get("/invoice-items")
 def list_invoice_items() -> list[dict[str, Any]]:
+    # MongoDB shell:
+    # db.invoice_items.find().sort({ created_at: -1 })
     docs = list(invoice_items_col.find().sort("created_at", -1))
     return serialize_documents(docs)
 
 
 @app.get("/invoice-items/{invoice_item_id}")
 def get_invoice_item(invoice_item_id: str) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoice_items.findOne({ _id: ObjectId("<invoice_item_id>") })
     _, doc = _get_or_404(invoice_items_col, invoice_item_id, "Invoice item")
     return serialize_document(doc)
 
@@ -360,7 +487,36 @@ def delete_invoice_item(invoice_item_id: str) -> dict[str, str]:
     return {"message": "Invoice item deleted"}
 
 
-# BILLING FLOW
+# ─────────────────────────────────────────────────────────────────────────────
+# BILLING FLOW  — most important route
+# Creates an invoice + all items + decrements stock atomically.
+# MongoDB shell equivalents (all 3 steps happen in one API call):
+#
+# Step 1 — Insert the invoice:
+# db.invoices.insertOne({
+#   customer_id: ObjectId("<customer_id>"),
+#   subtotal: 1299.99, tax: 65.00, total: 1364.99,
+#   status: "issued", line_item_ids: [],
+#   created_at: ISODate("..."), updated_at: ISODate("...")
+# })
+#
+# Step 2 — Insert all line items at once:
+# db.invoice_items.insertMany([
+#   { invoice_id: ObjectId("<inv_id>"), product_id: ObjectId("<prod_id>"),
+#     quantity: 1, unit_price: 1299.99, line_total: 1299.99,
+#     created_at: ISODate("..."), updated_at: ISODate("...") }
+# ])
+#
+# Step 3 — Decrement stock using $inc (atomic — no race condition):
+# db.products.updateOne(
+#   { _id: ObjectId("<product_id>"), stock: { $gte: 1 } },  // safety check
+#   { $inc: { stock: -1 }, $set: { updated_at: ISODate("...") } }
+# )
+#
+# On ANY error → full manual rollback:
+#   $inc stock back (+qty), deleteMany items, deleteOne invoice
+# ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/billing/invoices", status_code=status.HTTP_201_CREATED)
 def create_billing_invoice(payload: BillingInvoiceCreate) -> dict[str, Any]:
     customer_oid = parse_object_id(payload.customer_id)
