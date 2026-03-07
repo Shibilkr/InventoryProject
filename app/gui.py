@@ -298,7 +298,17 @@ class CRUDFrame(tk.Frame):
         ModernButton(btn_row, "  Delete  ", BTN_RED, BTN_RED_H,
                      command=self._on_delete).pack(side=tk.LEFT, padx=(0, 8))
         ModernButton(btn_row, "  Refresh  ", BTN_GREY, BTN_GREY_H,
-                     command=self.refresh).pack(side=tk.LEFT)
+                     command=self.refresh).pack(side=tk.LEFT, padx=(0, 16))
+
+        # Separator
+        tk.Frame(btn_row, bg=CARD_BORDER, width=2, height=24).pack(
+            side=tk.LEFT, padx=(0, 16), fill=tk.Y, pady=2)
+
+        # Bulk operations
+        ModernButton(btn_row, "  Update All  ", "#7c3aed", "#6525c4",
+                     command=self._on_update_all).pack(side=tk.LEFT, padx=(0, 8))
+        ModernButton(btn_row, "  Delete All  ", "#991b1b", "#7f1d1d",
+                     command=self._on_delete_all).pack(side=tk.LEFT)
 
         # Search
         search_row = tk.Frame(toolbar, bg=CARD_BG)
@@ -408,8 +418,33 @@ class CRUDFrame(tk.Frame):
             except Exception as exc:
                 messagebox.showerror("Delete failed", _api_error(exc))
 
+    def _on_update_all(self):
+        """Open a form dialog; the filled-in fields are applied to ALL records."""
+        self.open_update_all_dialog()
+
+    def _on_delete_all(self):
+        n = len(self._all_docs)
+        if n == 0:
+            messagebox.showinfo("Empty", "There are no records to delete.")
+            return
+        if messagebox.askyesno(
+                "Delete ALL Records",
+                f"This will permanently delete ALL {n} record(s) "
+                f"from {self.TITLE}.\n\n"
+                f"Records linked to other collections will be skipped.\n\n"
+                f"Are you sure?",
+                icon="warning"):
+            try:
+                result = api_delete(self.ENDPOINT)
+                msg = result.get("message", "Done")
+                messagebox.showinfo("Delete All", msg)
+                self.refresh()
+            except Exception as exc:
+                messagebox.showerror("Delete All failed", _api_error(exc))
+
     def open_add_dialog(self): ...
     def open_edit_dialog(self, doc: dict): ...
+    def open_update_all_dialog(self): ...
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -447,6 +482,17 @@ class SuppliersFrame(CRUDFrame):
             try:   api_put(f"{self.ENDPOINT}/{doc['id']}", data); self.refresh()
             except Exception as exc: messagebox.showerror("Error", _api_error(exc))
         FormDialog(self, "Edit Supplier", self._fields(doc), submit)
+
+    def open_update_all_dialog(self):
+        fields = [(k, l, False, None) for k, l, _, _ in self._fields()]
+        def submit(data):
+            if not data:
+                messagebox.showinfo("No changes", "Fill in at least one field."); return
+            try:
+                r = api_put(f"{self.ENDPOINT}/bulk-update", data)
+                messagebox.showinfo("Update All", r.get("message","Done")); self.refresh()
+            except Exception as exc: messagebox.showerror("Error", _api_error(exc))
+        FormDialog(self, f"Update All Suppliers — fill only fields to change", fields, submit)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -523,6 +569,22 @@ class ProductsFrame(CRUDFrame):
             except Exception as exc: messagebox.showerror("Error", _api_error(exc))
         FormDialog(self, "Edit Product", self._fields(doc), submit)
 
+    def open_update_all_dialog(self):
+        base = self._fields()
+        fields = [(k, l, False, None) + ((f[4],) if len(f) > 4 else ())
+                  for f in base for k, l, _, _ in [f[:4]]]
+        def submit(data):
+            if not data:
+                messagebox.showinfo("No changes", "Fill in at least one field."); return
+            try:
+                if "price" in data: data["price"] = float(data["price"])
+                if "stock" in data: data["stock"] = int(data["stock"])
+                r = api_put(f"{self.ENDPOINT}/bulk-update", data)
+                messagebox.showinfo("Update All", r.get("message","Done")); self.refresh()
+            except ValueError: messagebox.showerror("Error","Price/Stock must be numbers.")
+            except Exception as exc: messagebox.showerror("Error", _api_error(exc))
+        FormDialog(self, f"Update All Products — fill only fields to change", fields, submit)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Customers
@@ -557,6 +619,17 @@ class CustomersFrame(CRUDFrame):
             try:   api_put(f"{self.ENDPOINT}/{doc['id']}", data); self.refresh()
             except Exception as exc: messagebox.showerror("Error", _api_error(exc))
         FormDialog(self, "Edit Customer", self._fields(doc), submit)
+
+    def open_update_all_dialog(self):
+        fields = [(k, l, False, None) for k, l, _, _ in self._fields()]
+        def submit(data):
+            if not data:
+                messagebox.showinfo("No changes", "Fill in at least one field."); return
+            try:
+                r = api_put(f"{self.ENDPOINT}/bulk-update", data)
+                messagebox.showinfo("Update All", r.get("message","Done")); self.refresh()
+            except Exception as exc: messagebox.showerror("Error", _api_error(exc))
+        FormDialog(self, f"Update All Customers — fill only fields to change", fields, submit)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -634,6 +707,23 @@ class InvoicesFrame(CRUDFrame):
             except ValueError: messagebox.showerror("Error","Subtotal/Tax/Total must be numbers.")
             except Exception as exc: messagebox.showerror("Error", _api_error(exc))
         FormDialog(self, "Edit Invoice", self._fields(doc), submit)
+
+    def open_update_all_dialog(self):
+        base = self._fields()
+        fields = [(f[0], f[1], False, None) + ((f[4],) if len(f) > 4 else ())
+                  for f in base]
+        def submit(data):
+            if not data:
+                messagebox.showinfo("No changes", "Fill in at least one field."); return
+            try:
+                if "subtotal" in data: data["subtotal"]=float(data["subtotal"])
+                if "total"    in data: data["total"]=float(data["total"])
+                if "tax"      in data: data["tax"]=float(data["tax"])
+                r = api_put(f"{self.ENDPOINT}/bulk-update", data)
+                messagebox.showinfo("Update All", r.get("message","Done")); self.refresh()
+            except ValueError: messagebox.showerror("Error","Numbers required for subtotal/tax/total.")
+            except Exception as exc: messagebox.showerror("Error", _api_error(exc))
+        FormDialog(self, f"Update All Invoices — fill only fields to change", fields, submit)
 
     def _on_edit(self):
         doc_id = self._selected_id()
@@ -737,6 +827,22 @@ class InvoiceItemsFrame(CRUDFrame):
             except ValueError: messagebox.showerror("Error","Quantity=int, Unit Price=number.")
             except Exception as exc: messagebox.showerror("Error", _api_error(exc))
         FormDialog(self, "Edit Invoice Item", self._fields(doc), submit)
+
+    def open_update_all_dialog(self):
+        base = self._fields()
+        fields = [(f[0], f[1], False, None) + ((f[4],) if len(f) > 4 else ())
+                  for f in base]
+        def submit(data):
+            if not data:
+                messagebox.showinfo("No changes", "Fill in at least one field."); return
+            try:
+                if "quantity"   in data: data["quantity"]=int(data["quantity"])
+                if "unit_price" in data: data["unit_price"]=float(data["unit_price"])
+                r = api_put(f"{self.ENDPOINT}/bulk-update", data)
+                messagebox.showinfo("Update All", r.get("message","Done")); self.refresh()
+            except ValueError: messagebox.showerror("Error","Quantity=int, Unit Price=number.")
+            except Exception as exc: messagebox.showerror("Error", _api_error(exc))
+        FormDialog(self, f"Update All Invoice Items — fill only fields to change", fields, submit)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -97,6 +97,34 @@ def get_supplier(supplier_id: str) -> dict[str, Any]:
     return serialize_document(doc)
 
 
+@app.delete("/suppliers")
+def delete_all_suppliers() -> dict[str, Any]:
+    # MongoDB shell:
+    # db.suppliers.deleteMany({})
+    # Guard: skip suppliers that are linked to products
+    linked_ids = set()
+    for p in products_col.find({}, {"supplier_id": 1}):
+        if "supplier_id" in p:
+            linked_ids.add(p["supplier_id"])
+    result = suppliers_col.delete_many({"_id": {"$nin": list(linked_ids)}})
+    skipped = len(linked_ids)
+    return {"deleted": result.deleted_count, "skipped": skipped,
+            "message": f"Deleted {result.deleted_count} suppliers" + (f" (skipped {skipped} linked to products)" if skipped else "")}
+
+
+@app.put("/suppliers/bulk-update")
+def update_all_suppliers(payload: SupplierUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.suppliers.updateMany({}, { $set: { ... } })
+    updates = model_to_dict(payload, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+    updates["updated_at"] = now_utc()
+    result = suppliers_col.update_many({}, {"$set": updates})
+    return {"modified": result.modified_count,
+            "message": f"Updated {result.modified_count} suppliers"}
+
+
 @app.put("/suppliers/{supplier_id}")
 def update_supplier(supplier_id: str, payload: SupplierUpdate) -> dict[str, Any]:
     # MongoDB shell:
@@ -190,6 +218,38 @@ def get_product(product_id: str) -> dict[str, Any]:
     return serialize_document(doc)
 
 
+@app.delete("/products")
+def delete_all_products() -> dict[str, Any]:
+    # MongoDB shell:
+    # db.products.deleteMany({})
+    # Guard: skip products used in invoice items
+    linked_ids = set()
+    for it in invoice_items_col.find({}, {"product_id": 1}):
+        if "product_id" in it:
+            linked_ids.add(it["product_id"])
+    result = products_col.delete_many({"_id": {"$nin": list(linked_ids)}})
+    skipped = len(linked_ids)
+    return {"deleted": result.deleted_count, "skipped": skipped,
+            "message": f"Deleted {result.deleted_count} products" + (f" (skipped {skipped} used in invoice items)" if skipped else "")}
+
+
+@app.put("/products/bulk-update")
+def update_all_products(payload: ProductUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.products.updateMany({}, { $set: { ... } })
+    updates = model_to_dict(payload, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+    if "supplier_id" in updates and updates["supplier_id"]:
+        supplier_oid = parse_object_id(updates["supplier_id"])
+        _ensure_exists(suppliers_col, supplier_oid, "Supplier")
+        updates["supplier_id"] = supplier_oid
+    updates["updated_at"] = now_utc()
+    result = products_col.update_many({}, {"$set": updates})
+    return {"modified": result.modified_count,
+            "message": f"Updated {result.modified_count} products"}
+
+
 @app.put("/products/{product_id}")
 def update_product(product_id: str, payload: ProductUpdate) -> dict[str, Any]:
     # MongoDB shell:
@@ -272,6 +332,34 @@ def get_customer(customer_id: str) -> dict[str, Any]:
     # db.customers.findOne({ _id: ObjectId("<customer_id>") })
     _, doc = _get_or_404(customers_col, customer_id, "Customer")
     return serialize_document(doc)
+
+
+@app.delete("/customers")
+def delete_all_customers() -> dict[str, Any]:
+    # MongoDB shell:
+    # db.customers.deleteMany({})
+    # Guard: skip customers with existing invoices
+    linked_ids = set()
+    for inv in invoices_col.find({}, {"customer_id": 1}):
+        if "customer_id" in inv:
+            linked_ids.add(inv["customer_id"])
+    result = customers_col.delete_many({"_id": {"$nin": list(linked_ids)}})
+    skipped = len(linked_ids)
+    return {"deleted": result.deleted_count, "skipped": skipped,
+            "message": f"Deleted {result.deleted_count} customers" + (f" (skipped {skipped} with invoices)" if skipped else "")}
+
+
+@app.put("/customers/bulk-update")
+def update_all_customers(payload: CustomerUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.customers.updateMany({}, { $set: { ... } })
+    updates = model_to_dict(payload, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+    updates["updated_at"] = now_utc()
+    result = customers_col.update_many({}, {"$set": updates})
+    return {"modified": result.modified_count,
+            "message": f"Updated {result.modified_count} customers"}
 
 
 @app.put("/customers/{customer_id}")
@@ -363,6 +451,35 @@ def get_invoice(invoice_id: str) -> dict[str, Any]:
     return {"invoice": serialize_document(doc), "items": serialize_documents(items)}
 
 
+@app.delete("/invoices")
+def delete_all_invoices() -> dict[str, Any]:
+    # MongoDB shell (cascade — delete all items first, then all invoices):
+    # db.invoice_items.deleteMany({})
+    # db.invoices.deleteMany({})
+    items_result = invoice_items_col.delete_many({})
+    inv_result = invoices_col.delete_many({})
+    return {"deleted_invoices": inv_result.deleted_count,
+            "deleted_items": items_result.deleted_count,
+            "message": f"Deleted {inv_result.deleted_count} invoices and {items_result.deleted_count} invoice items"}
+
+
+@app.put("/invoices/bulk-update")
+def update_all_invoices(payload: InvoiceUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoices.updateMany({}, { $set: { ... } })
+    updates = model_to_dict(payload, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+    if "customer_id" in updates and updates["customer_id"]:
+        customer_oid = parse_object_id(updates["customer_id"])
+        _ensure_exists(customers_col, customer_oid, "Customer")
+        updates["customer_id"] = customer_oid
+    updates["updated_at"] = now_utc()
+    result = invoices_col.update_many({}, {"$set": updates})
+    return {"modified": result.modified_count,
+            "message": f"Updated {result.modified_count} invoices"}
+
+
 @app.put("/invoices/{invoice_id}")
 def update_invoice(invoice_id: str, payload: InvoiceUpdate) -> dict[str, Any]:
     # MongoDB shell:
@@ -452,6 +569,38 @@ def get_invoice_item(invoice_item_id: str) -> dict[str, Any]:
     # db.invoice_items.findOne({ _id: ObjectId("<invoice_item_id>") })
     _, doc = _get_or_404(invoice_items_col, invoice_item_id, "Invoice item")
     return serialize_document(doc)
+
+
+@app.delete("/invoice-items")
+def delete_all_invoice_items() -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoice_items.deleteMany({})
+    result = invoice_items_col.delete_many({})
+    return {"deleted": result.deleted_count,
+            "message": f"Deleted {result.deleted_count} invoice items"}
+
+
+@app.put("/invoice-items/bulk-update")
+def update_all_invoice_items(payload: InvoiceItemUpdate) -> dict[str, Any]:
+    # MongoDB shell:
+    # db.invoice_items.updateMany({}, { $set: { ... } })
+    updates = model_to_dict(payload, exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields provided for update")
+    if "invoice_id" in updates and updates["invoice_id"]:
+        invoice_oid = parse_object_id(updates["invoice_id"])
+        _ensure_exists(invoices_col, invoice_oid, "Invoice")
+        updates["invoice_id"] = invoice_oid
+    if "product_id" in updates and updates["product_id"]:
+        product_oid = parse_object_id(updates["product_id"])
+        _ensure_exists(products_col, product_oid, "Product")
+        updates["product_id"] = product_oid
+    if "quantity" in updates or "unit_price" in updates:
+        pass  # line_total can't be bulk-recomputed per-doc, skip
+    updates["updated_at"] = now_utc()
+    result = invoice_items_col.update_many({}, {"$set": updates})
+    return {"modified": result.modified_count,
+            "message": f"Updated {result.modified_count} invoice items"}
 
 
 @app.put("/invoice-items/{invoice_item_id}")
