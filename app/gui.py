@@ -1,18 +1,15 @@
 """
-Inventory & Billing Manager — Desktop GUI  (v2 — Modern Redesign)
-=================================================================
-* Sidebar navigation  (Dashboard · Suppliers · Products · Customers ·
-                        Invoices · Invoice Items · Billing)
-* Dashboard with live stat-cards
-* Per-table search / filter bar
-* Sortable column headers
-* Coloured action buttons  (green Add · blue Edit · red Delete)
-* Stylish modal forms with header strip
-* Live status bar  (server URL  ·  DB name  ·  record count)
-* Animated progress-bar splash screen
+Inventory & Billing Manager — Desktop GUI  (v3 — Modern & Polished)
+====================================================================
+* Refined sidebar with gradient-feel, larger icons, smooth hover
+* Dashboard with shadow-cards, large numbers, clean layout
+* Crisp CRUD tables with bigger rows, clear headers, zebra stripes
+* Elegant modal forms with large inputs and rounded buttons
+* Modern colour palette — cleaner whites, deeper accents
+* Auto-refresh every 5 seconds (silent)
+* Animated splash with progress bar
 
-Run from project root:
-    python run_gui.py
+Run:  python run_gui.py
 """
 
 from __future__ import annotations
@@ -27,40 +24,61 @@ import requests
 import uvicorn
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Palette & constants
+# Modern Palette
 # ─────────────────────────────────────────────────────────────────────────────
 
 API_HOST = "127.0.0.1"
 API_PORT = 8199
 API_BASE = f"http://{API_HOST}:{API_PORT}"
 
-SB_BG       = "#1a2744"   # dark navy sidebar
-SB_HOVER    = "#243560"
-SB_SEL      = "#2d4a8a"
-SB_FG       = "#c8d6f0"
+# Sidebar
+SB_BG       = "#0f1b2d"
+SB_HOVER    = "#1a2d4a"
+SB_SEL      = "#234680"
+SB_FG       = "#8ba3c7"
 SB_FG_SEL   = "#ffffff"
-SB_ICON_FG  = "#7fa8e8"
+SB_ICON_FG  = "#5b8bd4"
 
-CONTENT_BG  = "#f0f4fb"   # light blue-grey content
+# Content area
+BG          = "#eef2f7"
 CARD_BG     = "#ffffff"
-CARD_BORDER = "#dde5f5"
+CARD_BORDER = "#d8e0ec"
+CARD_SHADOW = "#c5cfdf"
 
-ROW_ODD     = "#f5f8ff"
+# Table
+ROW_ODD     = "#f6f8fc"
 ROW_EVEN    = "#ffffff"
-ROW_SEL     = "#d0e4ff"
+ROW_SEL     = "#cde0ff"
+HDR_TBL     = "#e4ecf7"
 
-BTN_ADD     = "#27ae60"
-BTN_ADD_H   = "#1e8449"
-BTN_EDIT    = "#2980b9"
-BTN_EDIT_H  = "#1f618d"
-BTN_DEL     = "#c0392b"
-BTN_DEL_H   = "#922b21"
-BTN_REF     = "#7f8c8d"
-BTN_REF_H   = "#626567"
+# Buttons
+BTN_GREEN   = "#1aab52"
+BTN_GREEN_H = "#158f44"
+BTN_BLUE    = "#2574d4"
+BTN_BLUE_H  = "#1b5eb0"
+BTN_RED     = "#d43b2c"
+BTN_RED_H   = "#b0301f"
+BTN_GREY    = "#6b7d94"
+BTN_GREY_H  = "#556878"
 
-HDR_BG      = "#1a2744"
-HDR_SUB     = "#7fa8e8"
-ACCENT      = "#2d4a8a"
+# Header / accent
+HDR_BG      = "#0f1b2d"
+HDR_SUB     = "#5b8bd4"
+ACCENT      = "#234680"
+
+# Fonts
+FONT        = "Segoe UI"
+FONT_TITLE  = (FONT, 17, "bold")
+FONT_HDR    = (FONT, 13, "bold")
+FONT_BTN    = (FONT, 10, "bold")
+FONT_LBL    = (FONT, 10)
+FONT_ENTRY  = (FONT, 10)
+FONT_SMALL  = (FONT, 9)
+FONT_TINY   = (FONT, 8)
+FONT_BIG    = (FONT, 32, "bold")
+FONT_ICON   = (FONT, 28)
+FONT_NAV    = (FONT, 11)
+FONT_LOGO   = (FONT, 10, "bold")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -117,18 +135,19 @@ def _api_error(exc: Exception) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ColourButton — flat tk.Button with hover effect
+# ModernButton — styled flat button with smooth hover
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ColourButton(tk.Button):
+class ModernButton(tk.Button):
     def __init__(self, parent, text, bg, hover_bg, command=None, **kw):
         kw.setdefault("fg", "#ffffff")
         kw.setdefault("relief", "flat")
         kw.setdefault("cursor", "hand2")
-        kw.setdefault("font", ("Segoe UI", 9, "bold"))
-        kw.setdefault("padx", 12)
-        kw.setdefault("pady", 5)
+        kw.setdefault("font", FONT_BTN)
+        kw.setdefault("padx", 16)
+        kw.setdefault("pady", 7)
         kw.setdefault("bd", 0)
+        kw.setdefault("highlightthickness", 0)
         super().__init__(parent, text=text, bg=bg, activebackground=hover_bg,
                          activeforeground="#ffffff", command=command, **kw)
         self._bg = bg
@@ -138,11 +157,11 @@ class ColourButton(tk.Button):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FormDialog — polished modal form with coloured header strip
+# FormDialog — elegant modal form with large inputs
 # ─────────────────────────────────────────────────────────────────────────────
 
 class FormDialog(tk.Toplevel):
-    """Modal form.  fields = [(key, label, required, default), ...]"""
+    """Modal form.  fields = [(key, label, required, default, [choices]), ...]"""
 
     def __init__(self, parent, title: str,
                  fields: list[tuple], on_submit) -> None:
@@ -150,7 +169,7 @@ class FormDialog(tk.Toplevel):
         self.title(title)
         self.resizable(False, False)
         self.grab_set()
-        self.configure(bg=CONTENT_BG)
+        self.configure(bg=CARD_BG)
         self._fields = fields
         self._on_submit = on_submit
         self._entries: dict[str, tk.StringVar] = {}
@@ -163,57 +182,55 @@ class FormDialog(tk.Toplevel):
         self.wait_window()
 
     def _build(self, fields):
-        # Coloured header
-        hdr = tk.Frame(self, bg=ACCENT, height=46)
+        # Header strip
+        hdr = tk.Frame(self, bg=ACCENT, height=52)
         hdr.pack(fill=tk.X)
         hdr.pack_propagate(False)
-        tk.Label(hdr, text=f"  {self.title()}", bg=ACCENT, fg="white",
-                 font=("Segoe UI", 11, "bold"), anchor="w").pack(
-            fill=tk.X, padx=14, pady=10)
+        tk.Label(hdr, text=f"   {self.title()}", bg=ACCENT, fg="white",
+                 font=FONT_HDR, anchor="w").pack(fill=tk.X, padx=16, pady=14)
 
         # Form body
-        body = tk.Frame(self, bg=CARD_BG, padx=20, pady=14)
+        body = tk.Frame(self, bg=CARD_BG, padx=28, pady=18)
         body.pack(fill=tk.BOTH)
-        self._combo_maps: dict[str, dict[str, str]] = {}  # key -> {display: value}
+        self._combo_maps: dict[str, dict[str, str]] = {}
         for i, field_def in enumerate(fields):
             key, label, required, default = field_def[:4]
             choices = field_def[4] if len(field_def) > 4 else None
-            lbl_text = label + ("  *" if required else "")
-            tk.Label(body, text=lbl_text, bg=CARD_BG, font=("Segoe UI", 9),
-                     fg="#333333", anchor="w").grid(
-                row=i, column=0, sticky="w", pady=(6, 2), padx=(0, 14))
+            lbl_text = f"{label}{'  *' if required else ''}"
+            tk.Label(body, text=lbl_text, bg=CARD_BG, font=FONT_LBL,
+                     fg="#374151", anchor="w").grid(
+                row=i, column=0, sticky="w", pady=(10, 3), padx=(0, 18))
             var = tk.StringVar(value="" if default is None else str(default))
             self._entries[key] = var
             if choices:
-                # choices = [(value, display_text), ...]
                 display_list = [display for _, display in choices]
                 value_map = {display: val for val, display in choices}
                 self._combo_maps[key] = value_map
-                # Pre-select the matching display text for current value
                 if default:
                     for val, display in choices:
                         if str(val) == str(default):
                             var.set(display)
                             break
                 cb = ttk.Combobox(body, textvariable=var, values=display_list,
-                                 width=36, font=("Segoe UI", 9), state="readonly")
-                cb.grid(row=i, column=1, pady=(6, 2), ipady=4)
+                                 width=40, font=FONT_ENTRY, state="readonly")
+                cb.grid(row=i, column=1, pady=(10, 3), ipady=5)
             else:
-                tk.Entry(body, textvariable=var, width=38, font=("Segoe UI", 9),
-                         relief="solid", bd=1, bg="#f7f9ff", fg="#222").grid(
-                    row=i, column=1, pady=(6, 2), ipady=4)
+                e = tk.Entry(body, textvariable=var, width=42, font=FONT_ENTRY,
+                             relief="solid", bd=1, bg="#f8fafd", fg="#1f2937",
+                             insertbackground="#234680",
+                             highlightcolor="#5b8bd4", highlightthickness=1)
+                e.grid(row=i, column=1, pady=(10, 3), ipady=6)
 
         # Button row
-        foot = tk.Frame(self, bg=CARD_BG, padx=20, pady=10)
+        foot = tk.Frame(self, bg=CARD_BG, padx=28, pady=14)
         foot.pack(fill=tk.X)
-        ColourButton(foot, "Save",   BTN_ADD, BTN_ADD_H,
-                     command=self._submit, width=10).pack(side=tk.LEFT, padx=(0, 8))
-        ColourButton(foot, "Cancel", BTN_REF, BTN_REF_H,
-                     command=self.destroy, width=8).pack(side=tk.LEFT)
+        ModernButton(foot, "   Save   ", BTN_GREEN, BTN_GREEN_H,
+                     command=self._submit).pack(side=tk.LEFT, padx=(0, 10))
+        ModernButton(foot, "  Cancel  ", BTN_GREY, BTN_GREY_H,
+                     command=self.destroy).pack(side=tk.LEFT)
 
     def _submit(self):
         data = {k: v.get().strip() for k, v in self._entries.items()}
-        # Map combobox display text back to actual values
         for key, value_map in self._combo_maps.items():
             if key in data and data[key] in value_map:
                 data[key] = value_map[data[key]]
@@ -228,7 +245,7 @@ class FormDialog(tk.Toplevel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CRUDFrame — base class: table + search + sort + CRUD buttons
+# CRUDFrame — polished table view with toolbar
 # ─────────────────────────────────────────────────────────────────────────────
 
 class CRUDFrame(tk.Frame):
@@ -237,10 +254,10 @@ class CRUDFrame(tk.Frame):
     TITLE:    str = ""
     ICON:     str = ""
 
-    _AUTO_REFRESH_MS = 5000  # auto-refresh every 5 seconds
+    _AUTO_REFRESH_MS = 5000
 
     def __init__(self, parent, *args, **kw):
-        super().__init__(parent, bg=CONTENT_BG, *args, **kw)
+        super().__init__(parent, bg=BG, *args, **kw)
         self._all_docs: list[dict] = []
         self._sort_col: str | None = None
         self._sort_asc: bool = True
@@ -256,62 +273,62 @@ class CRUDFrame(tk.Frame):
         self._schedule_auto_refresh()
 
     def _build_ui(self):
-        # Section title + record counter
-        sec_hdr = tk.Frame(self, bg=CONTENT_BG)
-        sec_hdr.pack(fill=tk.X, padx=20, pady=(18, 6))
-        tk.Label(sec_hdr, text=f"{self.ICON}  {self.TITLE}",
-                 bg=CONTENT_BG, fg="#1a2744",
-                 font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
-        self._count_lbl = tk.Label(sec_hdr, text="",
-                                    bg="#dde5f5", fg="#2d4a8a",
-                                    font=("Segoe UI", 9, "bold"),
-                                    padx=10, pady=3)
-        self._count_lbl.pack(side=tk.LEFT, padx=12)
+        # Section header
+        hdr_frame = tk.Frame(self, bg=BG)
+        hdr_frame.pack(fill=tk.X, padx=24, pady=(22, 10))
+        tk.Label(hdr_frame, text=f"{self.ICON}  {self.TITLE}",
+                 bg=BG, fg="#1e293b", font=FONT_TITLE).pack(side=tk.LEFT)
+        self._count_lbl = tk.Label(hdr_frame, text="",
+                                    bg="#dce6f2", fg=ACCENT,
+                                    font=(FONT, 10, "bold"),
+                                    padx=14, pady=4)
+        self._count_lbl.pack(side=tk.LEFT, padx=16)
 
-        # Toolbar card
-        toolbar = tk.Frame(self, bg=CARD_BG,
-                           highlightbackground=CARD_BORDER,
+        # Toolbar
+        toolbar = tk.Frame(self, bg=CARD_BG, highlightbackground=CARD_BORDER,
                            highlightthickness=1)
-        toolbar.pack(fill=tk.X, padx=20, pady=(0, 8))
+        toolbar.pack(fill=tk.X, padx=24, pady=(0, 10))
 
         btn_row = tk.Frame(toolbar, bg=CARD_BG)
-        btn_row.pack(side=tk.LEFT, padx=10, pady=8)
-        ColourButton(btn_row, "＋  Add New", BTN_ADD,  BTN_ADD_H,
-                     command=self._on_add).pack(side=tk.LEFT, padx=(0, 6))
-        ColourButton(btn_row, "✎  Edit",    BTN_EDIT, BTN_EDIT_H,
-                     command=self._on_edit).pack(side=tk.LEFT, padx=(0, 6))
-        ColourButton(btn_row, "✖  Delete",  BTN_DEL,  BTN_DEL_H,
-                     command=self._on_delete).pack(side=tk.LEFT, padx=(0, 6))
-        ColourButton(btn_row, "↻  Refresh", BTN_REF,  BTN_REF_H,
+        btn_row.pack(side=tk.LEFT, padx=14, pady=10)
+        ModernButton(btn_row, "  + Add New  ", BTN_GREEN, BTN_GREEN_H,
+                     command=self._on_add).pack(side=tk.LEFT, padx=(0, 8))
+        ModernButton(btn_row, "  Edit  ", BTN_BLUE, BTN_BLUE_H,
+                     command=self._on_edit).pack(side=tk.LEFT, padx=(0, 8))
+        ModernButton(btn_row, "  Delete  ", BTN_RED, BTN_RED_H,
+                     command=self._on_delete).pack(side=tk.LEFT, padx=(0, 8))
+        ModernButton(btn_row, "  Refresh  ", BTN_GREY, BTN_GREY_H,
                      command=self.refresh).pack(side=tk.LEFT)
 
-        # Search bar (right side of toolbar)
+        # Search
         search_row = tk.Frame(toolbar, bg=CARD_BG)
-        search_row.pack(side=tk.RIGHT, padx=10, pady=8)
-        tk.Label(search_row, text="🔍", bg=CARD_BG,
-                 font=("Segoe UI", 11)).pack(side=tk.LEFT)
+        search_row.pack(side=tk.RIGHT, padx=14, pady=10)
+        tk.Label(search_row, text="Search:", bg=CARD_BG,
+                 font=FONT_LBL, fg="#4b5563").pack(side=tk.LEFT, padx=(0, 6))
         self._search_var = tk.StringVar()
         self._search_var.trace_add("write", lambda *_: self._apply_filter())
-        tk.Entry(search_row, textvariable=self._search_var, width=28,
-                 font=("Segoe UI", 9), relief="solid", bd=1,
-                 bg="#f7f9ff").pack(side=tk.LEFT, ipady=4, padx=(4, 0))
-        tk.Button(search_row, text="✕", relief="flat", bg=CARD_BG, fg="#888",
-                  cursor="hand2", font=("Segoe UI", 9),
+        se = tk.Entry(search_row, textvariable=self._search_var, width=30,
+                      font=FONT_ENTRY, relief="solid", bd=1,
+                      bg="#f8fafd", fg="#1f2937",
+                      insertbackground="#234680",
+                      highlightcolor="#5b8bd4", highlightthickness=1)
+        se.pack(side=tk.LEFT, ipady=5, padx=(0, 4))
+        tk.Button(search_row, text="  X  ", relief="flat", bg=CARD_BG, fg="#9ca3af",
+                  cursor="hand2", font=FONT_SMALL, bd=0,
                   command=lambda: self._search_var.set("")).pack(side=tk.LEFT)
 
-        # Table card
-        table_card = tk.Frame(self, bg=CARD_BG,
-                              highlightbackground=CARD_BORDER,
+        # Table
+        table_card = tk.Frame(self, bg=CARD_BG, highlightbackground=CARD_BORDER,
                               highlightthickness=1)
-        table_card.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 16))
+        table_card.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 20))
 
         cols = [c[0] for c in self.COLUMNS]
         self.tree = ttk.Treeview(table_card, columns=cols,
                                  show="headings", selectmode="browse")
         for key, heading, width in self.COLUMNS:
-            self.tree.heading(key, text=heading + " ⇅",
+            self.tree.heading(key, text=f"  {heading}",
                               command=lambda k=key: self._sort_by(k), anchor="w")
-            self.tree.column(key, width=width, minwidth=50, anchor="w")
+            self.tree.column(key, width=width, minwidth=60, anchor="w")
 
         vsb = ttk.Scrollbar(table_card, orient=tk.VERTICAL,   command=self.tree.yview)
         hsb = ttk.Scrollbar(table_card, orient=tk.HORIZONTAL, command=self.tree.xview)
@@ -366,8 +383,6 @@ class CRUDFrame(tk.Frame):
             return None
         return self.tree.item(sel[0], "values")[0]
 
-    # ── Actions ───────────────────────────────────────────────────────────────
-
     def _on_add(self):
         self.open_add_dialog()
 
@@ -405,9 +420,9 @@ class SuppliersFrame(CRUDFrame):
     ENDPOINT = "/suppliers"
     TITLE    = "Suppliers"
     ICON     = "🏭"
-    COLUMNS  = [("id","ID",200),("name","Name",150),
-                ("contact_email","Email",175),("phone","Phone",120),
-                ("address","Address",210)]
+    COLUMNS  = [("id","ID",220),("name","Name",160),
+                ("contact_email","Email",185),("phone","Phone",130),
+                ("address","Address",220)]
 
     def get_row_values(self, doc):
         return [doc.get("id",""), doc.get("name",""),
@@ -442,21 +457,21 @@ class ProductsFrame(CRUDFrame):
     ENDPOINT = "/products"
     TITLE    = "Products"
     ICON     = "📦"
-    COLUMNS  = [("id","ID",200),("name","Name",145),("barcode","Barcode",135),
-                ("price","Price ($)",85),("stock","Stock",65),
-                ("supplier_name","Supplier",160),("description","Description",165)]
+    COLUMNS  = [("id","ID",220),("name","Name",155),("barcode","Barcode",140),
+                ("price","Price ($)",90),("stock","Stock",70),
+                ("supplier_name","Supplier",165),("description","Desc",170)]
 
     def __init__(self, parent, *args, **kw):
-        self._supplier_map: dict[str, str] = {}  # id -> name
+        self._supplier_map: dict[str, str] = {}
         super().__init__(parent, *args, **kw)
 
-    def refresh(self):
+    def refresh(self, _silent: bool = False):
         try:
             suppliers = api_get("/suppliers")
             self._supplier_map = {s["id"]: s["name"] for s in suppliers}
         except Exception:
             pass
-        super().refresh()
+        super().refresh(_silent=_silent)
 
     def get_row_values(self, doc):
         sid = doc.get("supplier_id", "")
@@ -466,7 +481,6 @@ class ProductsFrame(CRUDFrame):
                 sname, doc.get("description","")]
 
     def _get_supplier_choices(self):
-        """Fetch suppliers and return [(id, 'Name  (id)'), ...]."""
         try:
             suppliers = api_get("/suppliers")
             return [("", "— None —")] + [
@@ -518,8 +532,8 @@ class CustomersFrame(CRUDFrame):
     ENDPOINT = "/customers"
     TITLE    = "Customers"
     ICON     = "👤"
-    COLUMNS  = [("id","ID",200),("name","Name",150),("email","Email",175),
-                ("phone","Phone",120),("address","Address",210)]
+    COLUMNS  = [("id","ID",220),("name","Name",160),("email","Email",185),
+                ("phone","Phone",130),("address","Address",220)]
 
     def get_row_values(self, doc):
         return [doc.get("id",""), doc.get("name",""),
@@ -553,21 +567,21 @@ class InvoicesFrame(CRUDFrame):
     ENDPOINT = "/invoices"
     TITLE    = "Invoices"
     ICON     = "📄"
-    COLUMNS  = [("id","ID",200),("customer_name","Customer",160),
-                ("subtotal","Subtotal",90),("tax","Tax",70),("total","Total",90),
-                ("status","Status",80),("created_at","Created",160)]
+    COLUMNS  = [("id","ID",220),("customer_name","Customer",170),
+                ("subtotal","Subtotal",100),("tax","Tax",80),("total","Total",100),
+                ("status","Status",90),("created_at","Created",170)]
 
     def __init__(self, parent, *args, **kw):
-        self._customer_map: dict[str, str] = {}  # id -> name
+        self._customer_map: dict[str, str] = {}
         super().__init__(parent, *args, **kw)
 
-    def refresh(self):
+    def refresh(self, _silent: bool = False):
         try:
             customers = api_get("/customers")
             self._customer_map = {c["id"]: c["name"] for c in customers}
         except Exception:
             pass
-        super().refresh()
+        super().refresh(_silent=_silent)
 
     def get_row_values(self, doc):
         cid = doc.get("customer_id", "")
@@ -640,16 +654,16 @@ class InvoiceItemsFrame(CRUDFrame):
     ENDPOINT = "/invoice-items"
     TITLE    = "Invoice Items"
     ICON     = "🔖"
-    COLUMNS  = [("id","ID",200),("invoice_label","Invoice",180),
-                ("product_name","Product",160),("quantity","Qty",60),
-                ("unit_price","Unit Price $",90),("line_total","Line Total $",95)]
+    COLUMNS  = [("id","ID",220),("invoice_label","Invoice",190),
+                ("product_name","Product",170),("quantity","Qty",65),
+                ("unit_price","Unit Price $",100),("line_total","Line Total $",105)]
 
     def __init__(self, parent, *args, **kw):
-        self._invoice_map: dict[str, str] = {}   # id -> label
-        self._product_map: dict[str, str] = {}   # id -> name
+        self._invoice_map: dict[str, str] = {}
+        self._product_map: dict[str, str] = {}
         super().__init__(parent, *args, **kw)
 
-    def refresh(self):
+    def refresh(self, _silent: bool = False):
         try:
             invoices = api_get("/invoices")
             self._invoice_map = {inv["id"]: f"#{inv['id'][:8]}\u2026 ${inv.get('total','')}" for inv in invoices}
@@ -660,7 +674,7 @@ class InvoiceItemsFrame(CRUDFrame):
             self._product_map = {p["id"]: p["name"] for p in products}
         except Exception:
             pass
-        super().refresh()
+        super().refresh(_silent=_silent)
 
     def get_row_values(self, doc):
         inv_id = doc.get("invoice_id", "")
@@ -726,12 +740,12 @@ class InvoiceItemsFrame(CRUDFrame):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dashboard — stat cards + tips
+# Dashboard — polished stat cards
 # ─────────────────────────────────────────────────────────────────────────────
 
 class DashboardFrame(tk.Frame):
     def __init__(self, parent, *args, **kw):
-        super().__init__(parent, bg=CONTENT_BG, *args, **kw)
+        super().__init__(parent, bg=BG, *args, **kw)
         self._build()
         self.after(400, self.refresh)
         self.after(5000, self._auto_refresh)
@@ -744,55 +758,73 @@ class DashboardFrame(tk.Frame):
         self.after(5000, self._auto_refresh)
 
     def _stat_card(self, parent, icon, title, count_var, colour):
-        card = tk.Frame(parent, bg=CARD_BG,
+        # Outer shadow frame
+        shadow = tk.Frame(parent, bg=CARD_SHADOW)
+        shadow.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=8, pady=(0, 4))
+        card = tk.Frame(shadow, bg=CARD_BG,
                         highlightbackground=colour, highlightthickness=2,
-                        padx=20, pady=16)
-        card.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=8)
-        tk.Label(card, text=icon, bg=CARD_BG, font=("Segoe UI", 26)).pack(anchor="w")
+                        padx=22, pady=18)
+        card.pack(fill=tk.BOTH, expand=True, padx=(0, 2), pady=(0, 2))
+        tk.Label(card, text=icon, bg=CARD_BG, font=FONT_ICON).pack(anchor="w")
         tk.Label(card, textvariable=count_var, bg=CARD_BG, fg=colour,
-                 font=("Segoe UI", 30, "bold")).pack(anchor="w")
-        tk.Label(card, text=title, bg=CARD_BG, fg="#555",
-                 font=("Segoe UI", 10)).pack(anchor="w")
+                 font=FONT_BIG).pack(anchor="w", pady=(4, 0))
+        tk.Label(card, text=title, bg=CARD_BG, fg="#6b7280",
+                 font=FONT_LBL).pack(anchor="w", pady=(2, 0))
 
     def _build(self):
-        tk.Label(self, text="📊  Dashboard", bg=CONTENT_BG, fg="#1a2744",
-                 font=("Segoe UI", 18, "bold")).pack(anchor="w", padx=22, pady=(20, 4))
+        # Title
+        hdr = tk.Frame(self, bg=BG)
+        hdr.pack(fill=tk.X, padx=26, pady=(24, 6))
+        tk.Label(hdr, text="📊  Dashboard", bg=BG, fg="#1e293b",
+                 font=(FONT, 20, "bold")).pack(side=tk.LEFT)
+
         tk.Label(self, text="Live overview of your inventory & billing data",
-                 bg=CONTENT_BG, fg="#666",
-                 font=("Segoe UI", 9)).pack(anchor="w", padx=22, pady=(0, 14))
+                 bg=BG, fg="#6b7280",
+                 font=FONT_LBL).pack(anchor="w", padx=26, pady=(0, 18))
 
-        row = tk.Frame(self, bg=CONTENT_BG)
-        row.pack(fill=tk.X, padx=14, pady=(0, 12))
-        self._v_sup   = tk.StringVar(value="…")
-        self._v_pro   = tk.StringVar(value="…")
-        self._v_cus   = tk.StringVar(value="…")
-        self._v_inv   = tk.StringVar(value="…")
-        self._v_items = tk.StringVar(value="…")
-        self._stat_card(row, "🏭", "Suppliers",     self._v_sup,   "#8e44ad")
-        self._stat_card(row, "📦", "Products",      self._v_pro,   "#27ae60")
-        self._stat_card(row, "👤", "Customers",     self._v_cus,   "#2980b9")
-        self._stat_card(row, "📄", "Invoices",      self._v_inv,   "#e67e22")
-        self._stat_card(row, "🔖", "Invoice Items", self._v_items, "#c0392b")
+        # Stat cards row
+        row = tk.Frame(self, bg=BG)
+        row.pack(fill=tk.X, padx=18, pady=(0, 16))
+        self._v_sup   = tk.StringVar(value="...")
+        self._v_pro   = tk.StringVar(value="...")
+        self._v_cus   = tk.StringVar(value="...")
+        self._v_inv   = tk.StringVar(value="...")
+        self._v_items = tk.StringVar(value="...")
+        self._stat_card(row, "🏭", "Suppliers",     self._v_sup,   "#7c3aed")
+        self._stat_card(row, "📦", "Products",      self._v_pro,   "#059669")
+        self._stat_card(row, "👤", "Customers",     self._v_cus,   "#2563eb")
+        self._stat_card(row, "📄", "Invoices",      self._v_inv,   "#d97706")
+        self._stat_card(row, "🔖", "Invoice Items", self._v_items, "#dc2626")
 
+        # Quick tips card
         tip_card = tk.Frame(self, bg=CARD_BG,
                             highlightbackground=CARD_BORDER, highlightthickness=1)
-        tip_card.pack(fill=tk.X, padx=22, pady=(4, 0))
-        tk.Label(tip_card, text="  Quick Tips", bg=CARD_BG, fg="#1a2744",
-                 font=("Segoe UI", 10, "bold"),
-                 anchor="w").pack(fill=tk.X, padx=12, pady=(10, 4))
-        for t in [
-            "  •  Use the left sidebar to navigate between sections.",
-            "  •  Double-click any row in a table to edit it.",
-            "  •  Click a column header (⇅) to sort the table ascending / descending.",
-            "  •  Use the 🔍 search bar to filter records in real time.",
-            "  •  The Billing section creates a complete invoice with auto stock deduction.",
-        ]:
-            tk.Label(tip_card, text=t, bg=CARD_BG, fg="#444",
-                     font=("Segoe UI", 9), anchor="w").pack(fill=tk.X, padx=12, pady=1)
-        tk.Label(tip_card, text="", bg=CARD_BG).pack()
+        tip_card.pack(fill=tk.X, padx=26, pady=(0, 10))
+        tip_hdr = tk.Frame(tip_card, bg=ACCENT, height=40)
+        tip_hdr.pack(fill=tk.X)
+        tip_hdr.pack_propagate(False)
+        tk.Label(tip_hdr, text="   Quick Tips", bg=ACCENT, fg="#ffffff",
+                 font=(FONT, 11, "bold")).pack(side=tk.LEFT, pady=8)
 
-        ColourButton(self, "↻  Refresh Stats", BTN_REF, BTN_REF_H,
-                     command=self.refresh).pack(anchor="w", padx=22, pady=10)
+        tip_body = tk.Frame(tip_card, bg=CARD_BG, padx=20, pady=12)
+        tip_body.pack(fill=tk.X)
+        for t in [
+            "Use the sidebar to navigate between sections.",
+            "Double-click any row in a table to edit it.",
+            "Click a column header to sort ascending / descending.",
+            "Use the Search bar to filter records in real time.",
+            "The Billing section creates invoices with auto stock deduction.",
+        ]:
+            row_tip = tk.Frame(tip_body, bg=CARD_BG)
+            row_tip.pack(fill=tk.X, pady=3)
+            tk.Label(row_tip, text="  •  ", bg=CARD_BG, fg=ACCENT,
+                     font=(FONT, 11, "bold")).pack(side=tk.LEFT)
+            tk.Label(row_tip, text=t, bg=CARD_BG, fg="#4b5563",
+                     font=FONT_LBL, anchor="w").pack(side=tk.LEFT)
+
+        # Refresh button
+        ModernButton(self, "  Refresh Stats  ", BTN_GREY, BTN_GREY_H,
+                     command=self.refresh).pack(anchor="w", padx=26, pady=12)
 
     def refresh(self):
         for endpoint, var in [
@@ -814,7 +846,7 @@ class DashboardFrame(tk.Frame):
 
 class BillingFrame(tk.Frame):
     def __init__(self, parent, *args, **kw):
-        super().__init__(parent, bg=CONTENT_BG, *args, **kw)
+        super().__init__(parent, bg=BG, *args, **kw)
         self._line_items: list[dict] = []
         self._customers:  list[dict] = []
         self._products:   list[dict] = []
@@ -830,95 +862,102 @@ class BillingFrame(tk.Frame):
         self.after(10000, self._auto_reload)
 
     def _build(self):
+        # Title
         tk.Label(self, text="💳  Create Billing Invoice",
-                 bg=CONTENT_BG, fg="#1a2744",
-                 font=("Segoe UI", 16, "bold")).pack(anchor="w", padx=22, pady=(18, 6))
+                 bg=BG, fg="#1e293b",
+                 font=(FONT, 18, "bold")).pack(anchor="w", padx=26, pady=(22, 10))
 
-        # Customer + tax
+        # Customer + tax card
         hd = tk.Frame(self, bg=CARD_BG,
                       highlightbackground=CARD_BORDER, highlightthickness=1)
-        hd.pack(fill=tk.X, padx=22, pady=(0, 10))
+        hd.pack(fill=tk.X, padx=26, pady=(0, 12))
         inner = tk.Frame(hd, bg=CARD_BG)
-        inner.pack(fill=tk.X, padx=14, pady=12)
-        tk.Label(inner, text="Customer:", bg=CARD_BG, fg="#333",
-                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0,
-                                                    sticky="w", padx=(0, 8))
+        inner.pack(fill=tk.X, padx=18, pady=14)
+        tk.Label(inner, text="Customer:", bg=CARD_BG, fg="#374151",
+                 font=(FONT, 10, "bold")).grid(row=0, column=0,
+                                               sticky="w", padx=(0, 10))
         self.customer_var = tk.StringVar()
         self.customer_cb  = ttk.Combobox(inner, textvariable=self.customer_var,
-                                          width=42, state="readonly",
-                                          font=("Segoe UI", 9))
-        self.customer_cb.grid(row=0, column=1, padx=(0, 20))
-        tk.Label(inner, text="Tax Rate (%):", bg=CARD_BG, fg="#333",
-                 font=("Segoe UI", 9, "bold")).grid(row=0, column=2,
-                                                    sticky="w", padx=(0, 8))
+                                          width=44, state="readonly",
+                                          font=FONT_ENTRY)
+        self.customer_cb.grid(row=0, column=1, padx=(0, 24))
+        tk.Label(inner, text="Tax Rate (%):", bg=CARD_BG, fg="#374151",
+                 font=(FONT, 10, "bold")).grid(row=0, column=2,
+                                               sticky="w", padx=(0, 10))
         self.tax_var = tk.StringVar(value="0")
         tk.Entry(inner, textvariable=self.tax_var, width=8,
-                 font=("Segoe UI", 9), relief="solid", bd=1,
-                 bg="#f7f9ff").grid(row=0, column=3, ipady=4)
+                 font=FONT_ENTRY, relief="solid", bd=1,
+                 bg="#f8fafd", fg="#1f2937",
+                 highlightcolor="#5b8bd4", highlightthickness=1).grid(
+            row=0, column=3, ipady=5)
         self.tax_var.trace_add("write", lambda *_: self._update_summary())
-        ColourButton(inner, "↻ Reload", BTN_REF, BTN_REF_H,
-                     command=self._reload).grid(row=0, column=4, padx=(14, 0))
+        ModernButton(inner, "  Reload  ", BTN_GREY, BTN_GREY_H,
+                     command=self._reload).grid(row=0, column=4, padx=(18, 0))
 
-        # Line items
+        # Line items card
         li_card = tk.Frame(self, bg=CARD_BG,
                            highlightbackground=CARD_BORDER, highlightthickness=1)
-        li_card.pack(fill=tk.BOTH, expand=True, padx=22, pady=(0, 10))
-        tk.Label(li_card, text="Line Items", bg=CARD_BG, fg="#1a2744",
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=14, pady=(10, 4))
+        li_card.pack(fill=tk.BOTH, expand=True, padx=26, pady=(0, 12))
+
+        li_title = tk.Frame(li_card, bg=ACCENT, height=38)
+        li_title.pack(fill=tk.X)
+        li_title.pack_propagate(False)
+        tk.Label(li_title, text="   Line Items", bg=ACCENT, fg="#ffffff",
+                 font=(FONT, 11, "bold")).pack(side=tk.LEFT, pady=8)
 
         add_row = tk.Frame(li_card, bg=CARD_BG)
-        add_row.pack(fill=tk.X, padx=14, pady=(0, 8))
-        tk.Label(add_row, text="Product:", bg=CARD_BG, fg="#333",
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        add_row.pack(fill=tk.X, padx=16, pady=12)
+        tk.Label(add_row, text="Product:", bg=CARD_BG, fg="#374151",
+                 font=(FONT, 10, "bold")).pack(side=tk.LEFT)
         self.product_var = tk.StringVar()
         self.product_cb  = ttk.Combobox(add_row, textvariable=self.product_var,
-                                         width=46, state="readonly",
-                                         font=("Segoe UI", 9))
-        self.product_cb.pack(side=tk.LEFT, padx=(6, 14))
-        tk.Label(add_row, text="Qty:", bg=CARD_BG, fg="#333",
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+                                         width=48, state="readonly",
+                                         font=FONT_ENTRY)
+        self.product_cb.pack(side=tk.LEFT, padx=(8, 16))
+        tk.Label(add_row, text="Qty:", bg=CARD_BG, fg="#374151",
+                 font=(FONT, 10, "bold")).pack(side=tk.LEFT)
         self.qty_var = tk.StringVar(value="1")
         tk.Entry(add_row, textvariable=self.qty_var, width=6,
-                 font=("Segoe UI", 9), relief="solid", bd=1,
-                 bg="#f7f9ff").pack(side=tk.LEFT, padx=(4, 12), ipady=4)
-        ColourButton(add_row, "＋ Add Line",       BTN_ADD, BTN_ADD_H,
-                     command=self._add_line).pack(side=tk.LEFT, padx=(0, 6))
-        ColourButton(add_row, "✖ Remove Selected", BTN_DEL, BTN_DEL_H,
+                 font=FONT_ENTRY, relief="solid", bd=1,
+                 bg="#f8fafd").pack(side=tk.LEFT, padx=(6, 14), ipady=5)
+        ModernButton(add_row, "  + Add Line  ", BTN_GREEN, BTN_GREEN_H,
+                     command=self._add_line).pack(side=tk.LEFT, padx=(0, 8))
+        ModernButton(add_row, "  Remove  ", BTN_RED, BTN_RED_H,
                      command=self._remove_line).pack(side=tk.LEFT)
 
         cols = ("product_id","product_name","quantity","unit_price","line_total")
-        self.lines_tree = ttk.Treeview(li_card, columns=cols, show="headings", height=9)
+        self.lines_tree = ttk.Treeview(li_card, columns=cols, show="headings", height=8)
         for key, heading, width in [
-            ("product_id",   "Product ID",   180),
-            ("product_name", "Product Name", 180),
-            ("quantity",     "Qty",           60),
-            ("unit_price",   "Unit Price $",  110),
-            ("line_total",   "Line Total $",  110),
+            ("product_id",   "Product ID",   190),
+            ("product_name", "Product Name", 200),
+            ("quantity",     "Qty",           65),
+            ("unit_price",   "Unit Price $",  120),
+            ("line_total",   "Line Total $",  120),
         ]:
-            self.lines_tree.heading(key, text=heading, anchor="w")
+            self.lines_tree.heading(key, text=f"  {heading}", anchor="w")
             self.lines_tree.column(key, width=width, anchor="w")
         vsb = ttk.Scrollbar(li_card, orient=tk.VERTICAL,
                              command=self.lines_tree.yview)
         self.lines_tree.configure(yscrollcommand=vsb.set)
         self.lines_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
-                              padx=(14, 0), pady=(0, 10))
-        vsb.pack(side=tk.RIGHT, fill=tk.Y, pady=(0, 10), padx=(0, 8))
+                              padx=(16, 0), pady=(0, 12))
+        vsb.pack(side=tk.RIGHT, fill=tk.Y, pady=(0, 12), padx=(0, 10))
 
         # Summary footer
         foot = tk.Frame(self, bg=CARD_BG,
                         highlightbackground=CARD_BORDER, highlightthickness=1)
-        foot.pack(fill=tk.X, padx=22, pady=(0, 16))
+        foot.pack(fill=tk.X, padx=26, pady=(0, 20))
         inner2 = tk.Frame(foot, bg=CARD_BG)
-        inner2.pack(fill=tk.X, padx=14, pady=10)
+        inner2.pack(fill=tk.X, padx=18, pady=12)
         self.summary_lbl = tk.Label(inner2,
                                      text="Subtotal: —   Tax: —   Total: —",
-                                     bg=CARD_BG, fg="#1a2744",
-                                     font=("Segoe UI", 12, "bold"))
+                                     bg=CARD_BG, fg="#1e293b",
+                                     font=(FONT, 13, "bold"))
         self.summary_lbl.pack(side=tk.LEFT)
-        ColourButton(inner2, "💳  Issue Invoice", BTN_ADD, BTN_ADD_H,
-                     command=self._submit).pack(side=tk.RIGHT, padx=(8, 0))
-        ColourButton(inner2, "🗑  Clear", BTN_DEL, BTN_DEL_H,
-                     command=self._clear).pack(side=tk.RIGHT, padx=(0, 6))
+        ModernButton(inner2, "  💳  Issue Invoice  ", BTN_GREEN, BTN_GREEN_H,
+                     command=self._submit).pack(side=tk.RIGHT, padx=(10, 0))
+        ModernButton(inner2, "  Clear  ", BTN_RED, BTN_RED_H,
+                     command=self._clear).pack(side=tk.RIGHT, padx=(0, 8))
 
     def _reload(self):
         try:
@@ -930,7 +969,7 @@ class BillingFrame(tk.Frame):
         try:
             self._products = api_get("/products")
             self.product_cb["values"] = [
-                f"{p['name']}  [BC:{p.get('barcode','?')}]  Stock:{p['stock']}  ${p['price']}"
+                f"{p['name']}  |  Barcode: {p.get('barcode','?')}  |  Stock: {p['stock']}  |  ${p['price']}"
                 for p in self._products]
         except Exception as exc:
             messagebox.showerror("Error", f"Products:\n{_api_error(exc)}")
@@ -1003,11 +1042,11 @@ class BillingFrame(tk.Frame):
         try:
             result = api_post("/billing/invoices", payload)
             inv = result.get("invoice", {})
-            messagebox.showinfo("Invoice Created ✔",
+            messagebox.showinfo("Invoice Created",
                 f"Invoice created successfully!\n\n"
-                f"ID:     {inv.get('id','')}\n"
-                f"Total:  ${inv.get('total','')}\n"
-                f"Status: {inv.get('status','')}")
+                f"ID:       {inv.get('id','')}\n"
+                f"Total:   ${inv.get('total','')}\n"
+                f"Status:  {inv.get('status','')}")
             self._clear()
             self._reload()
         except Exception as exc:
@@ -1024,11 +1063,11 @@ class SidebarBtn(tk.Frame):
         self._cmd    = command
         self._active = False
         self._icon_lbl = tk.Label(self, text=icon, bg=SB_BG, fg=SB_ICON_FG,
-                                   font=("Segoe UI", 14), width=3, anchor="e")
-        self._icon_lbl.pack(side=tk.LEFT, padx=(12, 4))
+                                   font=(FONT, 15), width=3, anchor="e")
+        self._icon_lbl.pack(side=tk.LEFT, padx=(14, 6))
         self._text_lbl = tk.Label(self, text=label, bg=SB_BG, fg=SB_FG,
-                                   font=("Segoe UI", 10), anchor="w")
-        self._text_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=10)
+                                   font=FONT_NAV, anchor="w")
+        self._text_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=12)
         for w in (self, self._icon_lbl, self._text_lbl):
             w.bind("<Button-1>", lambda _: self._cmd())
             w.bind("<Enter>",    self._on_enter)
@@ -1041,7 +1080,7 @@ class SidebarBtn(tk.Frame):
         for w in (self, self._icon_lbl, self._text_lbl):
             w.config(bg=bg)
         self._text_lbl.config(fg=fg,
-                               font=("Segoe UI", 10,
+                               font=(FONT, 11,
                                      "bold" if active else "normal"))
         self._icon_lbl.config(fg=SB_FG_SEL if active else SB_ICON_FG)
 
@@ -1074,8 +1113,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Inventory & Billing Manager")
-        self.geometry("1280x720")
-        self.minsize(1020, 580)
+        self.geometry("1340x760")
+        self.minsize(1100, 620)
         self.configure(bg=SB_BG)
         self._apply_style()
         self._build_ui()
@@ -1087,32 +1126,32 @@ class App(tk.Tk):
             if theme in style.theme_names():
                 style.theme_use(theme)
                 break
-        style.configure("Treeview",         rowheight=28, font=("Segoe UI", 9))
-        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"),
-                        background="#e8f0fe")
-        style.configure("TCombobox",        font=("Segoe UI", 9))
+        style.configure("Treeview",         rowheight=32, font=FONT_LBL)
+        style.configure("Treeview.Heading", font=(FONT, 10, "bold"),
+                        background=HDR_TBL, foreground="#1e293b")
+        style.configure("TCombobox",        font=FONT_ENTRY)
         style.map("Treeview",
                   background=[("selected", ROW_SEL)],
-                  foreground=[("selected", "#1a2744")])
+                  foreground=[("selected", "#0f172a")])
 
     def _build_ui(self):
         # ── Sidebar ───────────────────────────────────────────────────────────
-        self._sidebar = tk.Frame(self, bg=SB_BG, width=200)
+        self._sidebar = tk.Frame(self, bg=SB_BG, width=220)
         self._sidebar.pack(side=tk.LEFT, fill=tk.Y)
         self._sidebar.pack_propagate(False)
 
-        # Logo block
-        logo_frame = tk.Frame(self._sidebar, bg=SB_BG, height=72)
+        # Logo
+        logo_frame = tk.Frame(self._sidebar, bg=SB_BG, height=80)
         logo_frame.pack(fill=tk.X)
         logo_frame.pack_propagate(False)
         tk.Label(logo_frame, text="📦", bg=SB_BG, fg="#ffffff",
-                 font=("Segoe UI", 22)).pack(side=tk.LEFT, padx=(14, 6), pady=16)
-        tk.Label(logo_frame, text="Inventory\nManager", bg=SB_BG, fg="#ffffff",
-                 font=("Segoe UI", 9, "bold"),
-                 justify="left").pack(side=tk.LEFT, pady=16)
+                 font=(FONT, 24)).pack(side=tk.LEFT, padx=(18, 8), pady=20)
+        tk.Label(logo_frame, text="Inventory &\nBilling Manager", bg=SB_BG, fg="#ffffff",
+                 font=FONT_LOGO,
+                 justify="left").pack(side=tk.LEFT, pady=20)
 
         # Divider
-        tk.Frame(self._sidebar, bg=SB_SEL, height=1).pack(fill=tk.X, padx=14)
+        tk.Frame(self._sidebar, bg="#1a2d4a", height=2).pack(fill=tk.X, padx=16, pady=(0, 6))
 
         # Nav buttons
         self._nav_btns: list[SidebarBtn] = []
@@ -1123,30 +1162,30 @@ class App(tk.Tk):
             btn.pack(fill=tk.X)
             self._nav_btns.append(btn)
 
-        # Footer version text
+        # Footer
         tk.Frame(self._sidebar, bg=SB_BG).pack(fill=tk.BOTH, expand=True)
-        tk.Label(self._sidebar, text="v2.0  ·  FastAPI + MongoDB",
-                 bg=SB_BG, fg="#4a6080",
-                 font=("Segoe UI", 7)).pack(side=tk.BOTTOM, pady=8)
+        tk.Label(self._sidebar, text="v3.0  ·  FastAPI + MongoDB",
+                 bg=SB_BG, fg="#3d5578",
+                 font=FONT_TINY).pack(side=tk.BOTTOM, pady=10)
 
         # ── Right panel ───────────────────────────────────────────────────────
-        right = tk.Frame(self, bg=CONTENT_BG)
+        right = tk.Frame(self, bg=BG)
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Top header bar
-        self._top_bar = tk.Frame(right, bg=HDR_BG, height=50)
+        self._top_bar = tk.Frame(right, bg=HDR_BG, height=54)
         self._top_bar.pack(fill=tk.X)
         self._top_bar.pack_propagate(False)
         self._page_title = tk.Label(self._top_bar, text="",
                                      bg=HDR_BG, fg="white",
-                                     font=("Segoe UI", 13, "bold"), anchor="w")
-        self._page_title.pack(side=tk.LEFT, padx=20, pady=12)
-        tk.Label(self._top_bar, text="MongoDB · FastAPI · Tkinter",
+                                     font=(FONT, 14, "bold"), anchor="w")
+        self._page_title.pack(side=tk.LEFT, padx=24, pady=14)
+        tk.Label(self._top_bar, text="MongoDB  ·  FastAPI  ·  Tkinter",
                  bg=HDR_BG, fg=HDR_SUB,
-                 font=("Segoe UI", 8), anchor="e").pack(side=tk.RIGHT, padx=18)
+                 font=FONT_SMALL, anchor="e").pack(side=tk.RIGHT, padx=22)
 
         # Page stacker
-        self._container = tk.Frame(right, bg=CONTENT_BG)
+        self._container = tk.Frame(right, bg=BG)
         self._container.pack(fill=tk.BOTH, expand=True)
         self._container.rowconfigure(0, weight=1)
         self._container.columnconfigure(0, weight=1)
@@ -1158,18 +1197,18 @@ class App(tk.Tk):
             self._pages.append(frame)
 
         # Status bar
-        status = tk.Frame(right, bg="#e8f0fe",
+        status = tk.Frame(right, bg="#e4ecf7",
                           highlightbackground=CARD_BORDER,
-                          highlightthickness=1, height=24)
+                          highlightthickness=1, height=28)
         status.pack(fill=tk.X, side=tk.BOTTOM)
         status.pack_propagate(False)
         tk.Label(status,
-                 text=f"  API: {API_BASE}   ·   DB: inventory_billing_db",
-                 bg="#e8f0fe", fg="#555", font=("Segoe UI", 8),
-                 anchor="w").pack(side=tk.LEFT, pady=4)
-        tk.Label(status, text="● Connected",
-                 bg="#e8f0fe", fg="#1a8a1a",
-                 font=("Segoe UI", 8, "bold")).pack(side=tk.RIGHT, padx=14)
+                 text=f"   API: {API_BASE}   ·   DB: inventory_billing_db",
+                 bg="#e4ecf7", fg="#6b7280", font=FONT_SMALL,
+                 anchor="w").pack(side=tk.LEFT, pady=5)
+        tk.Label(status, text="●  Connected",
+                 bg="#e4ecf7", fg="#059669",
+                 font=(FONT, 9, "bold")).pack(side=tk.RIGHT, padx=18)
 
     def _show_page(self, index: int):
         self._pages[index].tkraise()
@@ -1187,21 +1226,21 @@ def main() -> None:
     # 1. Start FastAPI server in a daemon thread
     threading.Thread(target=_run_server, daemon=True).start()
 
-    # 2. Animated splash screen
+    # 2. Splash screen
     splash = tk.Tk()
     splash.overrideredirect(True)
     splash.configure(bg=SB_BG)
-    splash.geometry("420x200")
+    splash.geometry("460x220")
     splash.eval("tk::PlaceWindow . center")
     tk.Label(splash, text="📦", bg=SB_BG, fg="white",
-             font=("Segoe UI", 36)).pack(pady=(22, 2))
+             font=(FONT, 40)).pack(pady=(28, 4))
     tk.Label(splash, text="Inventory & Billing Manager",
              bg=SB_BG, fg="white",
-             font=("Segoe UI", 13, "bold")).pack()
-    tk.Label(splash, text="Starting API server…",
-             bg=SB_BG, fg="#7fa8e8",
-             font=("Segoe UI", 9)).pack(pady=(6, 10))
-    pb = ttk.Progressbar(splash, mode="indeterminate", length=280)
+             font=(FONT, 14, "bold")).pack()
+    tk.Label(splash, text="Starting API server...",
+             bg=SB_BG, fg="#5b8bd4",
+             font=FONT_LBL).pack(pady=(8, 12))
+    pb = ttk.Progressbar(splash, mode="indeterminate", length=300)
     pb.pack()
     pb.start(12)
     splash.update()
