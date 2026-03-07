@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timezone
 from typing import Any
 
@@ -7,6 +8,13 @@ from fastapi import HTTPException
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def generate_barcode() -> str:
+    """Generate a valid EAN-13 barcode (12 random digits + check digit)."""
+    digits = [random.randint(0, 9) for _ in range(12)]
+    check = (10 - sum(d * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits)) % 10) % 10
+    return "".join(map(str, digits)) + str(check)
 
 
 def parse_object_id(value: str) -> ObjectId:

@@ -19,7 +19,6 @@ class SupplierUpdate(BaseModel):
 
 class ProductCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
-    sku: str = Field(..., min_length=1, max_length=80)
     supplier_id: Optional[str] = None
     description: Optional[str] = None
     price: float = Field(..., ge=0)
@@ -28,7 +27,6 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
-    sku: Optional[str] = Field(default=None, min_length=1, max_length=80)
     supplier_id: Optional[str] = None
     description: Optional[str] = None
     price: Optional[float] = Field(default=None, ge=0)

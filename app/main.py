@@ -20,7 +20,7 @@ from app.schemas import (
     SupplierCreate,
     SupplierUpdate,
 )
-from app.utils import model_to_dict, now_utc, parse_object_id, serialize_document, serialize_documents
+from app.utils import generate_barcode, model_to_dict, now_utc, parse_object_id, serialize_document, serialize_documents
 
 app = FastAPI(title="Inventory + Billing API", version="1.0.0")
 
@@ -113,15 +113,20 @@ def create_product(payload: ProductCreate) -> dict[str, Any]:
         _ensure_exists(suppliers_col, supplier_oid, "Supplier")
         data["supplier_id"] = supplier_oid
 
+    # Auto-generate a unique EAN-13 barcode
+    for _ in range(10):  # retry on the rare collision
+        barcode = generate_barcode()
+        if not products_col.find_one({"barcode": barcode}):
+            data["barcode"] = barcode
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Could not generate a unique barcode")
+
     now = now_utc()
     data["created_at"] = now
     data["updated_at"] = now
 
-    try:
-        result = products_col.insert_one(data)
-    except DuplicateKeyError as exc:
-        raise HTTPException(status_code=409, detail="SKU already exists") from exc
-
+    result = products_col.insert_one(data)
     created = products_col.find_one({"_id": result.inserted_id})
     return serialize_document(created)
 
@@ -151,12 +156,7 @@ def update_product(product_id: str, payload: ProductUpdate) -> dict[str, Any]:
         updates["supplier_id"] = supplier_oid
 
     updates["updated_at"] = now_utc()
-
-    try:
-        products_col.update_one({"_id": product_oid}, {"$set": updates})
-    except DuplicateKeyError as exc:
-        raise HTTPException(status_code=409, detail="SKU already exists") from exc
-
+    products_col.update_one({"_id": product_oid}, {"$set": updates})
     updated = products_col.find_one({"_id": product_oid})
     return serialize_document(updated)
 

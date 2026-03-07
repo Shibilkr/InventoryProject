@@ -408,19 +408,18 @@ class ProductsFrame(CRUDFrame):
     ENDPOINT = "/products"
     TITLE    = "Products"
     ICON     = "📦"
-    COLUMNS  = [("id","ID",200),("name","Name",145),("sku","SKU",95),
+    COLUMNS  = [("id","ID",200),("name","Name",145),("barcode","Barcode",135),
                 ("price","Price ($)",85),("stock","Stock",65),
                 ("supplier_id","Supplier ID",200),("description","Description",195)]
 
     def get_row_values(self, doc):
-        return [doc.get("id",""), doc.get("name",""), doc.get("sku",""),
+        return [doc.get("id",""), doc.get("name",""), doc.get("barcode",""),
                 doc.get("price",""), doc.get("stock",""),
                 doc.get("supplier_id",""), doc.get("description","")]
 
     def _fields(self, doc=None):
         d = doc or {}
         return [("name","Name",True,d.get("name")),
-                ("sku","SKU",True,d.get("sku")),
                 ("price","Price",True,d.get("price")),
                 ("stock","Stock (qty)",False,d.get("stock",0)),
                 ("supplier_id","Supplier ID",False,d.get("supplier_id")),
@@ -776,7 +775,7 @@ class BillingFrame(tk.Frame):
         try:
             self._products = api_get("/products")
             self.product_cb["values"] = [
-                f"{p['name']}  [SKU:{p['sku']}]  Stock:{p['stock']}  ${p['price']}"
+                f"{p['name']}  [BC:{p.get('barcode','?')}]  Stock:{p['stock']}  ${p['price']}"
                 for p in self._products]
         except Exception as exc:
             messagebox.showerror("Error", f"Products:\n{_api_error(exc)}")
