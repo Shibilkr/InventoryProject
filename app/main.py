@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, status
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
-from app.database import db, init_indexes
+from app.database import db, init_indexes, verify_connection
 from app.schemas import (
     BillingInvoiceCreate,
     CustomerCreate,
@@ -33,6 +33,7 @@ invoice_items_col: Collection = db["invoice_items"]
 
 @app.on_event("startup")
 def startup_event() -> None:
+    verify_connection()
     init_indexes()
 
 
