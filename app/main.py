@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, status
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
-from app.database import db, init_indexes, verify_connection
+from app.database import DATABASE_BACKEND, DATABASE_LABEL, db, init_indexes, seed_demo_data, verify_connection
 from app.schemas import (
     BillingInvoiceCreate,
     CustomerCreate,
@@ -35,11 +35,16 @@ invoice_items_col: Collection = db["invoice_items"]
 def startup_event() -> None:
     verify_connection()
     init_indexes()
+    seed_demo_data()
 
 
 @app.get("/")
 def health() -> dict[str, str]:
-    return {"message": "Inventory + Billing API is running"}
+    return {
+        "message": "Inventory + Billing API is running",
+        "database_backend": DATABASE_BACKEND,
+        "database_label": DATABASE_LABEL,
+    }
 
 
 def _ensure_exists(collection: Collection, oid: ObjectId, name: str) -> None:

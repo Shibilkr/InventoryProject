@@ -14,6 +14,7 @@ Run:  python run_gui.py
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import tkinter as tk
@@ -22,6 +23,8 @@ from typing import Any
 
 import requests
 import uvicorn
+
+from app.database import DATABASE_BACKEND, DATABASE_LABEL
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Modern Palette
@@ -67,7 +70,13 @@ HDR_SUB     = "#5b8bd4"
 ACCENT      = "#234680"
 
 # Fonts
-FONT        = "Segoe UI"
+if sys.platform == "darwin":
+    FONT = "SF Pro Text"
+elif sys.platform.startswith("win"):
+    FONT = "Segoe UI"
+else:
+    FONT = "Helvetica"
+
 FONT_TITLE  = (FONT, 17, "bold")
 FONT_HDR    = (FONT, 13, "bold")
 FONT_BTN    = (FONT, 10, "bold")
@@ -79,6 +88,10 @@ FONT_BIG    = (FONT, 32, "bold")
 FONT_ICON   = (FONT, 28)
 FONT_NAV    = (FONT, 11)
 FONT_LOGO   = (FONT, 10, "bold")
+
+DB_BRAND_TEXT = "In-Memory Demo" if DATABASE_BACKEND == "memory" else "MongoDB"
+DB_STATUS_TEXT = "Demo Mode" if DATABASE_BACKEND == "memory" else "Connected"
+DB_STATUS_COLOR = "#d97706" if DATABASE_BACKEND == "memory" else "#059669"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1270,7 +1283,7 @@ class App(tk.Tk):
 
         # Footer
         tk.Frame(self._sidebar, bg=SB_BG).pack(fill=tk.BOTH, expand=True)
-        tk.Label(self._sidebar, text="v3.0  ·  FastAPI + MongoDB",
+        tk.Label(self._sidebar, text=f"v3.0  ·  FastAPI + {DB_BRAND_TEXT}",
                  bg=SB_BG, fg="#3d5578",
                  font=FONT_TINY).pack(side=tk.BOTTOM, pady=10)
 
@@ -1286,7 +1299,7 @@ class App(tk.Tk):
                                      bg=HDR_BG, fg="white",
                                      font=(FONT, 14, "bold"), anchor="w")
         self._page_title.pack(side=tk.LEFT, padx=24, pady=14)
-        tk.Label(self._top_bar, text="MongoDB  ·  FastAPI  ·  Tkinter",
+        tk.Label(self._top_bar, text=f"{DB_BRAND_TEXT}  ·  FastAPI  ·  Tkinter",
                  bg=HDR_BG, fg=HDR_SUB,
                  font=FONT_SMALL, anchor="e").pack(side=tk.RIGHT, padx=22)
 
@@ -1309,11 +1322,11 @@ class App(tk.Tk):
         status.pack(fill=tk.X, side=tk.BOTTOM)
         status.pack_propagate(False)
         tk.Label(status,
-                 text=f"   API: {API_BASE}   ·   DB: inventory_billing_db",
+                 text=f"   API: {API_BASE}   ·   DB: {DATABASE_LABEL}",
                  bg="#e4ecf7", fg="#6b7280", font=FONT_SMALL,
                  anchor="w").pack(side=tk.LEFT, pady=5)
-        tk.Label(status, text="●  Connected",
-                 bg="#e4ecf7", fg="#059669",
+        tk.Label(status, text=f"●  {DB_STATUS_TEXT}",
+                 bg="#e4ecf7", fg=DB_STATUS_COLOR,
                  font=(FONT, 9, "bold")).pack(side=tk.RIGHT, padx=18)
 
     def _show_page(self, index: int):
@@ -1361,7 +1374,7 @@ def main() -> None:
         messagebox.showerror(
             "Server failed to start",
             "Could not connect to the API server.\n\n"
-            "Make sure MongoDB is running and try again.")
+            "If MongoDB is unavailable, set INVENTORY_DB_MODE=memory and try again.")
         return
 
     # 3. Launch main window
